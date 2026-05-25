@@ -7,46 +7,76 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// Temporary minimal palette — replaced fully in Theme step
-// Calm Luxury accent: #B8A369 (mat altın)
-private val CalmGold = Color(0xFFB8A369)
-private val DeepDark = Color(0xFF111214)
-private val SurfaceDark = Color(0xFF1A1C1F)
-private val OnSurfaceDark = Color(0xFFE8E2D9)
+// ─── Color Schemes ────────────────────────────────────────────────────────────
 
-private val DarkColorScheme = darkColorScheme(
+private val CalmLuxuryDark = darkColorScheme(
     primary = CalmGold,
+    onPrimary = DeepDark,
+    primaryContainer = CalmGoldSubtle,
+    onPrimaryContainer = CalmGold,
+
+    secondary = CalmGoldDim,
+    onSecondary = DeepDark,
+    secondaryContainer = SurfaceVariantDark,
+    onSecondaryContainer = OnSurfaceVariantDark,
+
     background = DeepDark,
+    onBackground = OnBackgroundDark,
+
     surface = SurfaceDark,
-    onBackground = OnSurfaceDark,
     onSurface = OnSurfaceDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = OnSurfaceVariantDark,
+
+    outline = OutlineDark,
+    outlineVariant = OutlineVariantDark,
+
+    error = ErrorDark,
+    onError = OnErrorDark,
 )
 
-private val LightColorScheme = lightColorScheme(
+private val CalmLuxuryLight = lightColorScheme(
     primary = CalmGold,
-    background = Color(0xFFF8F5F0),
-    surface = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF1A1A1A),
-    onSurface = Color(0xFF1A1A1A),
+    onPrimary = BackgroundLight,
+    primaryContainer = CalmGoldSubtle,
+    onPrimaryContainer = CalmGoldDim,
+
+    secondary = CalmGoldDim,
+    onSecondary = BackgroundLight,
+    secondaryContainer = SurfaceVariantLight,
+    onSecondaryContainer = OnSurfaceVariantLight,
+
+    background = BackgroundLight,
+    onBackground = OnBackgroundLight,
+
+    surface = SurfaceLight,
+    onSurface = OnSurfaceLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = OnSurfaceVariantLight,
+
+    outline = OutlineLight,
+    outlineVariant = OutlineVariantLight,
+
+    error = ErrorLight,
+    onError = OnErrorLight,
 )
+
+// ─── Theme Entry Point ────────────────────────────────────────────────────────
 
 @Composable
 fun StillTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colorScheme = if (darkTheme) CalmLuxuryDark else CalmLuxuryLight
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Edge-to-edge: let content draw behind system bars
             WindowCompat.setDecorFitsSystemWindows(window, false)
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
@@ -57,7 +87,8 @@ fun StillTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        // Typography and shapes replaced in full Theme step
-        content = content
+        typography = StillTypography,
+        shapes = StillShapes,
+        content = content,
     )
 }
