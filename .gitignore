@@ -15,8 +15,8 @@ captures/
 *.ap_
 *.dex
 
-# Gradle wrapper jar (keep .properties and scripts, not the jar)
-gradle/wrapper/gradle-wrapper.jar
+# Gradle wrapper jar — committed intentionally for CI compatibility
+# gradle/wrapper/gradle-wrapper.jar
 
 # Generated sources
 app/build/

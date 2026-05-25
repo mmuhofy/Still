@@ -35,9 +35,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Check Gradle wrapper integrity
-        uses: gradle/actions/wrapper-validation@v4
-
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 

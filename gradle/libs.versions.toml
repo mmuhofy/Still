@@ -1,7 +1,7 @@
 [versions]
 # Language
 kotlin = "2.2.20"
-ksp = "2.2.20-1.0.29"
+ksp = "2.2.20-2.0.3"
 
 # Android
 agp = "8.10.1"
