@@ -9,16 +9,16 @@
 
 ### 🏗️ Project Setup
 
-- 🔴 Create Android project (Kotlin, Jetpack Compose, Min SDK 26, Target SDK 36)
-- 🔴 Set up `gradle/libs.versions.toml` with all verified dependency versions
-- 🔴 Configure Hilt (2.57.1) — app-level setup, `@HiltAndroidApp`
-- 🔴 Configure KSP plugin
-- 🔴 Configure Room (2.8.4)
-- 🔴 Set up project folder structure (`ui/`, `domain/`, `data/`, `di/`, `util/`)
-- 🔴 Set up Compose BOM (2026.04.01) and Material 3
-- 🔴 Configure Navigation Compose
-- 🔴 Add `Constants.kt` to `util/`
-- 🔴 Set up base theme (Calm Luxury dark/light)
+- 🟢 Create Android project (Kotlin, Jetpack Compose, Min SDK 26, Target SDK 36)
+- 🟢 Set up `gradle/libs.versions.toml` with all verified dependency versions
+- 🟢 Configure Hilt (2.57.1) — app-level setup, `@HiltAndroidApp`
+- 🟢 Configure KSP plugin
+- 🟢 Configure Room (2.8.4)
+- 🟢 Set up project folder structure (`ui/`, `domain/`, `data/`, `di/`, `util/`)
+- 🟢 Set up Compose BOM (2026.04.01) and Material 3
+- 🟢 Configure Navigation Compose
+- 🟢 Add `Constants.kt` to `util/`
+- 🟢 Set up base theme (Calm Luxury dark/light)
 
 ### 🗄️ Data Layer
 
