@@ -1,0 +1,83 @@
+# ==============================
+# Android / Gradle
+# ==============================
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle wrapper jar (keep .properties and scripts, not the jar)
+gradle/wrapper/gradle-wrapper.jar
+
+# Generated sources
+app/build/
+app/schemas/   # Room schema exports — commit these if you want schema migration history
+
+# ==============================
+# Kotlin / JVM
+# ==============================
+*.class
+*.log
+*.ctxt
+.mtj.tmp/
+hs_err_pid*
+replay_pid*
+
+# ==============================
+# Secrets — NEVER commit
+# ==============================
+secrets.properties
+api_keys.properties
+google-services.json
+*.keystore
+*.jks
+
+# ==============================
+# IDE — IntelliJ / Android Studio
+# ==============================
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/modules.xml
+*.iws
+out/
+
+# ==============================
+# macOS
+# ==============================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ==============================
+# Windows
+# ==============================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ==============================
+# Linux
+# ==============================
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
