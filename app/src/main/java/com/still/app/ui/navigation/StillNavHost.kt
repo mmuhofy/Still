@@ -1,32 +1,32 @@
 package com.still.app.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.still.app.ui.editor.NoteEditorScreen
 import com.still.app.ui.notes.NotesListScreen
 import com.still.app.ui.onboarding.OnboardingScreen
 import com.still.app.util.Constants
 import kotlinx.coroutines.flow.first
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.Alignment
-import androidx.hilt.navigation.compose.hiltViewModel
-import javax.inject.Inject
 
 object Routes {
-    const val SPLASH = "splash"
+    const val ARG_NOTE_ID = "noteId"
     const val ONBOARDING = "onboarding"
     const val NOTES_LIST = "notes_list"
-    const val NOTE_EDITOR = "note_editor/{noteId}"
+    const val NOTE_EDITOR = "note_editor/{$ARG_NOTE_ID}"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
 
@@ -39,13 +39,11 @@ fun StillNavHost(
 ) {
     val navController = rememberNavController()
 
-    // Read onboarding state once at startup — no recomposition loop
     val onboardingCompleted by produceState<Boolean?>(initialValue = null) {
         val prefs = dataStore.data.first()
         value = prefs[booleanPreferencesKey(Constants.PrefKeys.ONBOARDING_COMPLETED)] ?: false
     }
 
-    // Show nothing until DataStore resolves — avoids flash of wrong screen
     if (onboardingCompleted == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -78,9 +76,16 @@ fun StillNavHost(
             )
         }
 
-        composable(Routes.NOTE_EDITOR) { backStackEntry ->
-            val noteId = backStackEntry.arguments?.getString("noteId")?.toLongOrNull() ?: -1L
-            // Placeholder — NoteEditorScreen added in editor step
+        composable(
+            route = Routes.NOTE_EDITOR,
+            arguments = listOf(
+                navArgument(Routes.ARG_NOTE_ID) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                },
+            ),
+        ) {
+            NoteEditorScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.SEARCH) {
