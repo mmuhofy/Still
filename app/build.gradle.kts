@@ -91,6 +91,9 @@ dependencies {
     // DataStore — preferences persistence
     implementation(libs.datastore.preferences)
 
+    // AppCompat — XML theme parent for Compose apps
+    implementation(libs.appcompat)
+
     // Coroutines
     implementation(libs.coroutines.android)
 

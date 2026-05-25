@@ -19,6 +19,7 @@ room = "2.8.4"
 navigationCompose = "2.9.0"
 lifecycleRuntimeCompose = "2.9.0"
 datastorePreferences = "1.1.4"
+appcompat = "1.7.0"
 
 # Coroutines
 coroutines = "1.10.2"
@@ -57,6 +58,9 @@ hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-com
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# AppCompat (XML theme parent for Compose apps)
+appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 
 # DataStore
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
