@@ -20,7 +20,7 @@ captures/
 
 # Generated sources
 app/build/
-app/schemas/   # Room schema exports — commit these if you want schema migration history
+#app/schemas/   # Room schema exports — commit these if you want schema migration history
 
 # ==============================
 # Kotlin / JVM
