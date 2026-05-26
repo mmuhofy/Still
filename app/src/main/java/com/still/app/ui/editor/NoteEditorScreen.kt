@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.FormatListBulleted
@@ -43,21 +44,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.material.icons.outlined.ArrowBack
+import com.still.app.util.MarkdownRenderer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,14 +60,12 @@ fun NoteEditorScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var overflowExpanded by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    // Pop back when note is deleted
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
     }
 
-    // Auto-focus editor on new note
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading && state.noteId == -1L) {
             focusRequester.requestFocus()
@@ -96,7 +87,6 @@ fun NoteEditorScreen(
                 },
                 title = {},
                 actions = {
-                    // Pin toggle
                     IconButton(onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin) }) {
                         Icon(
                             imageVector = Icons.Outlined.PushPin,
@@ -107,8 +97,6 @@ fun NoteEditorScreen(
                                 MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-
-                    // Overflow menu
                     Box {
                         IconButton(onClick = { overflowExpanded = true }) {
                             Icon(
@@ -156,13 +144,11 @@ fun NoteEditorScreen(
     ) { innerPadding ->
         if (state.isLoading) return@Scaffold
 
-        val scrollState = rememberScrollState()
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(scrollState)
+                .verticalScroll(rememberScrollState())
                 .imePadding(),
         ) {
             NoteTextField(
@@ -177,39 +163,49 @@ fun NoteEditorScreen(
     }
 }
 
-// ── Text Field — title + body in one field ────────────────────────────────────
+// ── Text Field ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun NoteTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
-    focusRequester: FocusRequester,
+    focusRequester: androidx.compose.ui.focus.FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    // Derive title line count to apply headline style to first line
-    val text = value.text
-    val firstNewline = text.indexOf('\n')
-    val titleEnd = if (firstNewline == -1) text.length else firstNewline
+    val headingFontSize = MaterialTheme.typography.headlineSmall.fontSize
+    val bodyFontSize = MaterialTheme.typography.bodyLarge.fontSize
 
-    val annotated = buildAnnotatedString {
-        // Title — headline weight
-        append(text)
-        if (titleEnd > 0) {
-            addStyle(
-                style = SpanStyle(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = MaterialTheme.typography.headlineSmall.fontSize,
-                ),
-                start = 0,
-                end = titleEnd,
-            )
-        }
-        // Body — body style (default)
+    // Render markdown → AnnotatedString for display
+    val rendered = remember(value.text) {
+        MarkdownRenderer.render(
+            raw = value.text,
+            headingFontSize = headingFontSize,
+            bodyFontSize = bodyFontSize,
+        )
+    }
+
+    // Compose BasicTextField accepts TextFieldValue with AnnotatedString
+    val styledValue = remember(rendered, value.selection, value.composition) {
+        TextFieldValue(
+            annotatedString = rendered,
+            selection = value.selection,
+            composition = value.composition,
+        )
     }
 
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = styledValue,
+        onValueChange = { newValue ->
+            // Pass through as plain-text TextFieldValue to ViewModel
+            // so raw markdown is preserved in storage
+            onValueChange(
+                TextFieldValue(
+                    text = newValue.text,
+                    selection = newValue.selection,
+                    composition = newValue.composition,
+                )
+            )
+        },
         modifier = modifier.focusRequester(focusRequester),
         textStyle = MaterialTheme.typography.bodyLarge.copy(
             color = MaterialTheme.colorScheme.onBackground,
@@ -217,7 +213,6 @@ private fun NoteTextField(
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         decorationBox = { innerTextField ->
             Box {
-                // Placeholder — only shown when empty
                 if (value.text.isEmpty()) {
                     Text(
                         text = "Yazmaya başla...",
@@ -261,16 +256,14 @@ private fun FormattingToolbar(
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ToolbarButton(icon = Icons.Outlined.FormatBold, label = "Kalın", onClick = onBold)
-                ToolbarButton(icon = Icons.Outlined.FormatItalic, label = "İtalik", onClick = onItalic)
-                ToolbarButton(icon = Icons.Outlined.FormatUnderlined, label = "Altı çizili", onClick = onUnderline)
-                ToolbarButton(icon = Icons.Outlined.Title, label = "Başlık", onClick = onHeading)
-                ToolbarButton(icon = Icons.Outlined.FormatListBulleted, label = "Liste", onClick = onBullet)
-
+                ToolbarButton(Icons.Outlined.FormatBold, "Kalın", onBold)
+                ToolbarButton(Icons.Outlined.FormatItalic, "İtalik", onItalic)
+                ToolbarButton(Icons.Outlined.FormatUnderlined, "Altı çizili", onUnderline)
+                ToolbarButton(Icons.Outlined.Title, "Başlık", onHeading)
+                ToolbarButton(Icons.Outlined.FormatListBulleted, "Liste", onBullet)
                 Spacer(Modifier.weight(1f))
-
-                ToolbarButton(icon = Icons.AutoMirrored.Outlined.Undo, label = "Geri al", onClick = onUndo)
-                ToolbarButton(icon = Icons.AutoMirrored.Outlined.Redo, label = "Yinele", onClick = onRedo)
+                ToolbarButton(Icons.AutoMirrored.Outlined.Undo, "Geri al", onUndo)
+                ToolbarButton(Icons.AutoMirrored.Outlined.Redo, "Yinele", onRedo)
                 Spacer(Modifier.width(4.dp))
             }
         }
@@ -278,15 +271,8 @@ private fun FormattingToolbar(
 }
 
 @Composable
-private fun ToolbarButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp),
-    ) {
+private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = label,
