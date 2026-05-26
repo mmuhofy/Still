@@ -12,16 +12,14 @@ import com.still.app.domain.usecase.GetNoteByIdUseCase
 import com.still.app.domain.usecase.PinNoteUseCase
 import com.still.app.domain.usecase.UpdateNoteUseCase
 import com.still.app.ui.navigation.Routes
-import com.still.app.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,7 +33,7 @@ data class NoteEditorUiState(
     val isPinned: Boolean = false,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
-    val isDeleted: Boolean = false,   // signal to NavHost to pop back
+    val isDeleted: Boolean = false,
 )
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -54,7 +52,6 @@ sealed interface NoteEditorEvent {
 }
 
 @HiltViewModel
-@OptIn(FlowPreview::class)
 class NoteEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getNoteById: GetNoteByIdUseCase,
@@ -64,7 +61,6 @@ class NoteEditorViewModel @Inject constructor(
     private val pinNote: PinNoteUseCase,
 ) : ViewModel() {
 
-    // NavType.LongType ile tanımlandığı için direkt Long olarak okunabilir
     private val noteId: Long = savedStateHandle[Routes.ARG_NOTE_ID] ?: -1L
 
     private val _uiState = MutableStateFlow(NoteEditorUiState(noteId = noteId))
@@ -77,15 +73,12 @@ class NoteEditorViewModel @Inject constructor(
 
     init {
         if (noteId == -1L) {
-            // New note — start empty, create on first save
             _uiState.update { it.copy(isLoading = false) }
         } else {
-            // Existing note — load from DB
             getNoteById(noteId)
                 .filterNotNull()
                 .onEach { note ->
                     if (_uiState.value.isLoading) {
-                        // Only set content on first load — don't overwrite user edits
                         val text = buildDisplayText(note)
                         _uiState.update { state ->
                             state.copy(
@@ -99,11 +92,11 @@ class NoteEditorViewModel @Inject constructor(
                 .launchIn(viewModelScope)
         }
 
-        // Silent autosave — debounced 1.5s after last keystroke
+        // Save on every content change — no debounce, only when text actually differs
         _uiState
             .drop(1) // skip initial emission
-            .debounce(Constants.AUTOSAVE_DEBOUNCE_MS)
-            .distinctUntilChanged { old, new -> old.content.text == new.content.text }
+            .map { it.content.text }
+            .distinctUntilChanged()
             .onEach { save() }
             .launchIn(viewModelScope)
     }
@@ -162,7 +155,7 @@ class NoteEditorViewModel @Inject constructor(
         if (state.isLoading || state.isDeleted) return
 
         val fullText = state.content.text.trim()
-        if (fullText.isBlank()) return   // don't persist empty notes
+        if (fullText.isBlank()) return // don't persist empty notes
 
         val lines = fullText.lines()
         val title = lines.firstOrNull()?.take(200) ?: ""
@@ -189,7 +182,6 @@ class NoteEditorViewModel @Inject constructor(
 
     // ── Formatting helpers ────────────────────────────────────────────────────
 
-    // Wraps selected text with marker, or inserts marker pair at cursor
     private fun applyInlineFormat(marker: String) {
         val current = _uiState.value.content
         val sel = current.selection
@@ -214,7 +206,6 @@ class NoteEditorViewModel @Inject constructor(
         _uiState.update { it.copy(content = newValue) }
     }
 
-    // Prepends prefix to the current line
     private fun applyLinePrefix(prefix: String) {
         val current = _uiState.value.content
         val text = current.text
@@ -227,7 +218,6 @@ class NoteEditorViewModel @Inject constructor(
         val newCursor: Int
 
         if (already) {
-            // Toggle off — remove prefix
             newText = text.substring(0, lineStart) + text.substring(lineStart + prefix.length)
             newCursor = (cursor - prefix.length).coerceAtLeast(lineStart)
         } else {
@@ -245,7 +235,6 @@ class NoteEditorViewModel @Inject constructor(
         undoStack.addLast(value)
     }
 
-    // Combine title + body back into single text for the editor field
     private fun buildDisplayText(note: Note): String {
         return if (note.content.isBlank()) note.title
         else "${note.title}\n${note.content}"
