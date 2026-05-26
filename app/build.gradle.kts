@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,8 +9,7 @@ plugins {
     alias(libs.plugins.room)
 }
 
-// Read local.properties safely
-import java.util.Properties
+// Read local.properties safely — populated by CI via GitHub Secret
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) load(f.inputStream())
@@ -27,7 +28,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Expose API key to code via BuildConfig — never hardcoded
+        // Expose API key to code — never hardcoded, sourced from local.properties or CI secret
         buildConfigField(
             "String",
             "GEMINI_API_KEY",
@@ -35,7 +36,6 @@ android {
         )
     }
 
-    // Room schema export directory
     room {
         schemaDirectory("$projectDir/schemas")
     }
@@ -72,12 +72,10 @@ android {
 }
 
 dependencies {
-    // Compose BOM — single source of truth for Compose versions
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
-    // Compose core
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
@@ -85,37 +83,28 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
 
-    // Lifecycle
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
 
-    // Navigation
     implementation(libs.navigation.compose)
 
-    // Hilt — DI
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Room — local database
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // DataStore — preferences persistence
     implementation(libs.datastore.preferences)
 
-    // AppCompat — XML theme parent for Compose apps
     implementation(libs.appcompat)
 
-    // Coroutines
     implementation(libs.coroutines.android)
 
-    // Debug tooling
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
-    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.espresso.core)
