@@ -35,6 +35,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Inject secrets into local.properties
+        run: |
+          echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
+
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 

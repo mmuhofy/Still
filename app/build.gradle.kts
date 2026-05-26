@@ -7,6 +7,12 @@ plugins {
     alias(libs.plugins.room)
 }
 
+// Read local.properties safely
+val localProps = java.util.Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
+}
+
 android {
     namespace = "com.still.app"
     compileSdk = 36
@@ -19,6 +25,13 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Expose API key to code via BuildConfig — never hardcoded
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProps.getProperty("gemini.api.key", "")}\""
+        )
     }
 
     // Room schema export directory
