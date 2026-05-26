@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.FormatListBulleted
@@ -101,15 +100,13 @@ fun NoteEditorScreen(
                 },
                 title = {},
                 actions = {
-                    // AI loading indicator
                     if (state.isAiLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .padding(end = 4.dp),
+                            modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.primary,
                         )
+                        Spacer(Modifier.width(8.dp))
                     }
                     IconButton(onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin) }) {
                         Icon(
@@ -240,7 +237,8 @@ private fun NoteTextField(
     val firstNewline = text.indexOf('\n')
     val titleEnd = if (firstNewline == -1) text.length else firstNewline
 
-    // Build annotated string: title bold + body normal + ghost italic
+    // Build annotated string for display — title bold, body normal
+    // Ghost text is rendered SEPARATELY below, not inside BasicTextField
     val annotated = buildAnnotatedString {
         if (titleEnd > 0) {
             withStyle(
@@ -255,34 +253,10 @@ private fun NoteTextField(
         } else {
             append(text)
         }
-
-        // Ghost text appended inline after cursor
-        if (ghostText.isNotBlank()) {
-            withStyle(
-                SpanStyle(
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                    fontStyle = FontStyle.Italic,
-                )
-            ) {
-                append(ghostText)
-            }
-        }
-
-        // Inline AI error message
-        if (aiError != null) {
-            withStyle(
-                SpanStyle(
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                    fontStyle = FontStyle.Italic,
-                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                )
-            ) {
-                append("  $aiError")
-            }
-        }
     }
 
     Column(modifier = modifier) {
+        // ── Real input field — clean, no ghost appended ───────────────────────
         BasicTextField(
             value = TextFieldValue(
                 annotatedString = annotated,
@@ -290,23 +264,25 @@ private fun NoteTextField(
                 composition = value.composition,
             ),
             onValueChange = { new ->
-                // Strip ghost/error from stored value — only real text goes to ViewModel
+                // Pass plain text back to ViewModel — annotatedString carries only display styles
                 onValueChange(
                     TextFieldValue(
-                        text = new.text.take(text.length),
+                        text = new.text,
                         selection = new.selection,
                         composition = new.composition,
                     )
                 )
             },
-            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
             textStyle = MaterialTheme.typography.bodyLarge.copy(
                 color = MaterialTheme.colorScheme.onBackground,
             ),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             decorationBox = { innerTextField ->
                 Box {
-                    if (value.text.isEmpty()) {
+                    if (text.isEmpty()) {
                         Text(
                             text = "Yazmaya başla...",
                             style = MaterialTheme.typography.headlineSmall,
@@ -318,18 +294,33 @@ private fun NoteTextField(
             },
         )
 
-        // Ghost text tap target (tap = accept, long-press = variants)
+        // ── Ghost text — separate Text, tappable ──────────────────────────────
         if (ghostText.isNotBlank()) {
             Text(
-                text = "↵ Kabul et",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                text = ghostText,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    fontStyle = FontStyle.Italic,
+                ),
                 modifier = Modifier
-                    .padding(top = 4.dp)
+                    .fillMaxWidth()
                     .combinedClickable(
                         onClick = onAcceptGhost,
                         onLongClick = onLongPressGhost,
-                    ),
+                    )
+                    .padding(top = 2.dp),
+            )
+        }
+
+        // ── Inline AI error ───────────────────────────────────────────────────
+        if (aiError != null) {
+            Text(
+                text = aiError,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    fontStyle = FontStyle.Italic,
+                ),
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
