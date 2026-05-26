@@ -1,5 +1,6 @@
 package com.still.app.data.repository
 
+import android.util.Log
 import com.still.app.BuildConfig
 import com.still.app.domain.repository.GeminiRepository
 import kotlinx.coroutines.Dispatchers
@@ -10,19 +11,40 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 
-private const val GEMINI_MODEL = "gemini-flash-latest"
-private const val GEMINI_BASE_URL =
-    "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent"
+private const val TAG = "GeminiRepo"
 private const val CONNECT_TIMEOUT_MS = 5_000
 private const val READ_TIMEOUT_MS = 10_000
+private const val GEMINI_BASE =
+    "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+
+// Priority order — first successful response wins
+private val MODEL_FALLBACK_CHAIN = listOf(
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash-lite",
+)
 
 class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
 
     override suspend fun getCompletion(context: String): Result<String?> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val raw = callGemini(buildSinglePrompt(context), candidateCount = 1)
-                extractFirstCandidate(raw)
+                val prompt = buildSinglePrompt(context)
+                var lastError: Exception? = null
+
+                for (model in MODEL_FALLBACK_CHAIN) {
+                    try {
+                        val raw = callGemini(model, prompt, candidateCount = 1)
+                        val result = extractFirstCandidate(raw)
+                        Log.d(TAG, "[$model] completion: $result")
+                        return@runCatching result
+                    } catch (e: Exception) {
+                        Log.w(TAG, "[$model] failed: ${e.message}")
+                        lastError = e
+                    }
+                }
+                throw lastError ?: Exception("All models failed")
             }
         }
 
@@ -32,16 +54,33 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
     ): Result<List<String>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val raw = callGemini(buildVariantsPrompt(context), candidateCount = count)
-                extractAllCandidates(raw)
+                val prompt = buildVariantsPrompt(context)
+                var lastError: Exception? = null
+
+                for (model in MODEL_FALLBACK_CHAIN) {
+                    try {
+                        val raw = callGemini(model, prompt, candidateCount = 1)
+                        val results = extractAllCandidates(raw)
+                        if (results.isNotEmpty()) {
+                            Log.d(TAG, "[$model] variants: $results")
+                            return@runCatching results
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "[$model] variants failed: ${e.message}")
+                        lastError = e
+                    }
+                }
+                throw lastError ?: Exception("All models failed for variants")
             }
         }
 
     // ── HTTP ──────────────────────────────────────────────────────────────────
 
-    private fun callGemini(prompt: String, candidateCount: Int): String {
-        val url = URL("$GEMINI_BASE_URL?key=${BuildConfig.GEMINI_API_KEY}")
+    private fun callGemini(model: String, prompt: String, candidateCount: Int): String {
+        val url = URL(GEMINI_BASE.format(model) + "?key=${BuildConfig.GEMINI_API_KEY}")
         val body = buildRequestBody(prompt, candidateCount)
+
+        Log.d(TAG, "[$model] request body: $body")
 
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -58,9 +97,12 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
             conn.inputStream.bufferedReader().readText()
         } else {
             val error = conn.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-            throw Exception("Gemini API error $responseCode: $error")
+            Log.e(TAG, "[$model] HTTP $responseCode: $error")
+            throw Exception("HTTP $responseCode: $error")
         }
         conn.disconnect()
+
+        Log.d(TAG, "[$model] response: $responseBody")
         return responseBody
     }
 
@@ -127,23 +169,19 @@ Continuations:"""
                 .firstOrNull()
                 ?.trim()
             text?.ifBlank { null }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "extractFirstCandidate failed: ${e.message}\nJSON: $json")
             null
         }
     }
 
     private fun extractAllCandidates(json: String): List<String> {
         return try {
-            // With candidateCount > 1 the model returns multiple candidates
-            // BUT gemini-flash doesn't reliably support candidateCount,
-            // so we also handle single-candidate multi-line response as fallback
             val root = JSONObject(json)
             val candidates = root.getJSONArray("candidates")
-
             val results = mutableListOf<String>()
 
             if (candidates.length() > 1) {
-                // Multiple candidates returned
                 for (i in 0 until candidates.length()) {
                     val text = candidates.getJSONObject(i)
                         .getJSONObject("content")
@@ -154,7 +192,6 @@ Continuations:"""
                     if (text.isNotBlank()) results += text
                 }
             } else {
-                // Single candidate — parse line by line
                 val raw = candidates.getJSONObject(0)
                     .getJSONObject("content")
                     .getJSONArray("parts")
@@ -167,7 +204,8 @@ Continuations:"""
             }
 
             results.take(3)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "extractAllCandidates failed: ${e.message}\nJSON: $json")
             emptyList()
         }
     }
