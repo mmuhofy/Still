@@ -76,12 +76,10 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("candidateCount", candidateCount)
+                if (candidateCount > 1) put("candidateCount", candidateCount)
                 put("maxOutputTokens", 60)
                 put("temperature", 0.7)
-                put("stopSequences", JSONArray().apply {
-                    put("\n")  // single-line completions only
-                })
+                put("stopSequences", JSONArray().apply { put("\n") })
             })
         }.toString()
     }

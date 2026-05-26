@@ -253,7 +253,10 @@ class NoteEditorViewModel @Inject constructor(
     // ── AI trigger — debounced 400ms after typing stops ───────────────────────
 
     private fun scheduleAiCompletion(text: String) {
-        if (!aiEnabled) return
+        if (!aiEnabled) {
+            _uiState.update { it.copy(isAiLoading = false, ghostText = "") }
+            return
+        }
         if (text.isBlank()) return
 
         aiJob?.cancel()
