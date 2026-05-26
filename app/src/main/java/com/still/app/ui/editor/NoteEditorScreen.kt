@@ -55,6 +55,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -175,9 +176,9 @@ fun NoteEditorScreen(
             NoteTextField(
                 value = state.content,
                 ghostText = state.ghostText,
+                realTextLength = state.realTextLength,
                 aiError = state.aiError,
                 onValueChange = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
-                onAcceptGhost = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
                 onLongPressGhost = { viewModel.onEvent(NoteEditorEvent.RequestVariants) },
                 focusRequester = focusRequester,
                 modifier = Modifier
@@ -187,7 +188,6 @@ fun NoteEditorScreen(
         }
     }
 
-    // Variants bottom sheet
     if (state.showVariants) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.onEvent(NoteEditorEvent.DismissVariants) },
@@ -226,9 +226,9 @@ fun NoteEditorScreen(
 private fun NoteTextField(
     value: TextFieldValue,
     ghostText: String,
+    realTextLength: Int,
     aiError: String?,
     onValueChange: (TextFieldValue) -> Unit,
-    onAcceptGhost: () -> Unit,
     onLongPressGhost: () -> Unit,
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
@@ -237,38 +237,55 @@ private fun NoteTextField(
     val firstNewline = text.indexOf('\n')
     val titleEnd = if (firstNewline == -1) text.length else firstNewline
 
-    // Build annotated string for display — title bold, body normal
-    // Ghost text is rendered SEPARATELY below, not inside BasicTextField
+    val ghostColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+    val titleFontSize = MaterialTheme.typography.headlineSmall.fontSize
+
+    // Build AnnotatedString: real text (title bold) + ghost text (muted italic)
     val annotated = buildAnnotatedString {
+        // Title line — bold + larger
         if (titleEnd > 0) {
-            withStyle(
-                SpanStyle(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = MaterialTheme.typography.headlineSmall.fontSize,
-                )
-            ) {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = titleFontSize)) {
                 append(text.substring(0, titleEnd))
             }
             append(text.substring(titleEnd))
         } else {
             append(text)
         }
+
+        // Ghost inline after real text — only if cursor is at end
+        if (ghostText.isNotBlank() && value.selection.start == text.length) {
+            withStyle(SpanStyle(color = ghostColor, fontStyle = FontStyle.Italic)) {
+                append(ghostText)
+            }
+        }
     }
 
+    // We pass annotated string but strip ghost in onValueChange using realTextLength
+    val displayValue = TextFieldValue(
+        annotatedString = annotated,
+        selection = value.selection,
+        composition = value.composition,
+    )
+
     Column(modifier = modifier) {
-        // ── Real input field — clean, no ghost appended ───────────────────────
         BasicTextField(
-            value = TextFieldValue(
-                annotatedString = annotated,
-                selection = value.selection,
-                composition = value.composition,
-            ),
+            value = displayValue,
             onValueChange = { new ->
-                // Pass plain text back to ViewModel — annotatedString carries only display styles
+                // Strip ghost from incoming text — real text is at most realTextLength chars
+                // (ghost was appended visually, user typed on top of it)
+                val strippedText = if (new.text.length > realTextLength + ghostText.length) {
+                    // User typed after ghost — take real part + new char
+                    new.text.take(realTextLength) + new.text.drop(realTextLength + ghostText.length)
+                } else {
+                    new.text.take(realTextLength.coerceAtMost(new.text.length))
+                }
+                val strippedSelection = TextRange(
+                    new.selection.start.coerceAtMost(strippedText.length)
+                )
                 onValueChange(
                     TextFieldValue(
-                        text = new.text,
-                        selection = new.selection,
+                        text = strippedText,
+                        selection = strippedSelection,
                         composition = new.composition,
                     )
                 )
@@ -294,25 +311,22 @@ private fun NoteTextField(
             },
         )
 
-        // ── Ghost text — separate Text, tappable ──────────────────────────────
-        if (ghostText.isNotBlank()) {
+        // Long-press hint on ghost (tap = Enter to accept, long-press = variants)
+        if (ghostText.isNotBlank() && value.selection.start == text.length) {
             Text(
-                text = ghostText,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                    fontStyle = FontStyle.Italic,
+                text = "↵ kabul",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                 ),
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .padding(top = 2.dp)
                     .combinedClickable(
-                        onClick = onAcceptGhost,
+                        onClick = {},
                         onLongClick = onLongPressGhost,
-                    )
-                    .padding(top = 2.dp),
+                    ),
             )
         }
 
-        // ── Inline AI error ───────────────────────────────────────────────────
         if (aiError != null) {
             Text(
                 text = aiError,

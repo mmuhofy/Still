@@ -19,7 +19,6 @@ import com.still.app.domain.usecase.UpdateNoteUseCase
 import com.still.app.ui.navigation.Routes
 import com.still.app.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +31,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 // ── UI State ──────────────────────────────────────────────────────────────────
@@ -45,10 +44,11 @@ data class NoteEditorUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val isDeleted: Boolean = false,
-    // AI ghost text
     val ghostText: String = "",
+    // Length of real text when ghost was set — used to strip ghost in onValueChange
+    val realTextLength: Int = 0,
     val isAiLoading: Boolean = false,
-    val aiError: String? = null,         // shown inline, not as dialog
+    val aiError: String? = null,
     val showVariants: Boolean = false,
     val variants: List<String> = emptyList(),
 )
@@ -66,9 +66,9 @@ sealed interface NoteEditorEvent {
     data object ApplyBullet : NoteEditorEvent
     data object Undo : NoteEditorEvent
     data object Redo : NoteEditorEvent
-    data object AcceptGhost : NoteEditorEvent        // tap ghost text
-    data object DismissGhost : NoteEditorEvent       // continue typing
-    data object RequestVariants : NoteEditorEvent    // long-press ghost text
+    data object AcceptGhost : NoteEditorEvent
+    data object DismissGhost : NoteEditorEvent
+    data object RequestVariants : NoteEditorEvent
     data class AcceptVariant(val text: String) : NoteEditorEvent
     data object DismissVariants : NoteEditorEvent
 }
@@ -91,17 +91,13 @@ class NoteEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(NoteEditorUiState(noteId = noteId))
     val uiState = _uiState.asStateFlow()
 
-    // AI enabled preference
     private val aiEnabledFlow = dataStore.data
         .map { it[booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)] ?: false }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val aiEnabled get() = aiEnabledFlow.value
 
-    // Formatting flag — skip double undo push
     private var skipNextUndoPush = false
-
-    // AI debounce job
     private var aiJob: Job? = null
 
     private val undoStack = ArrayDeque<TextFieldValue>()
@@ -122,6 +118,7 @@ class NoteEditorViewModel @Inject constructor(
                                 content = TextFieldValue(text, selection = TextRange(text.length)),
                                 isPinned = note.isPinned,
                                 isLoading = false,
+                                realTextLength = text.length,
                             )
                         }
                     }
@@ -129,7 +126,6 @@ class NoteEditorViewModel @Inject constructor(
                 .launchIn(viewModelScope)
         }
 
-        // Save on content change
         _uiState
             .drop(1)
             .map { it.content.text }
@@ -141,8 +137,36 @@ class NoteEditorViewModel @Inject constructor(
     fun onEvent(event: NoteEditorEvent) {
         when (event) {
             is NoteEditorEvent.ContentChanged -> {
-                val current = _uiState.value.content
+                val state = _uiState.value
+                val incoming = event.value
 
+                // ── Enter pressed while ghost is active → accept ghost ─────────
+                if (state.ghostText.isNotBlank()) {
+                    val realLen = state.realTextLength
+                    // Strip any ghost that may have leaked into incoming text
+                    val realText = incoming.text.take(realLen)
+                    val pressedEnter = incoming.text.length > realLen &&
+                            incoming.text.getOrNull(realLen) == '\n'
+                    if (pressedEnter) {
+                        acceptGhostInternal()
+                        return
+                    }
+                    // Any other key dismisses ghost and applies the real keystroke
+                    val cleaned = TextFieldValue(
+                        text = realText + incoming.text.drop(
+                            realLen + state.ghostText.length
+                        ).let { if (incoming.text.length > realLen + state.ghostText.length) it else incoming.text.drop(realLen) },
+                        selection = incoming.selection.let {
+                            TextRange(it.start.coerceAtMost(realText.length + 1))
+                        },
+                        composition = incoming.composition,
+                    )
+                    clearGhostAndProcess(cleaned)
+                    return
+                }
+
+                // ── Normal typing ─────────────────────────────────────────────
+                val current = state.content
                 if (skipNextUndoPush) {
                     skipNextUndoPush = false
                 } else {
@@ -150,23 +174,39 @@ class NoteEditorViewModel @Inject constructor(
                     redoStack.clear()
                 }
 
-                val newValue = handleBulletContinuation(current, event.value)
-                _uiState.update { it.copy(content = newValue, ghostText = "", aiError = null) }
-
+                val newValue = handleBulletContinuation(current, incoming)
+                _uiState.update {
+                    it.copy(
+                        content = newValue,
+                        ghostText = "",
+                        realTextLength = newValue.text.length,
+                        aiError = null,
+                    )
+                }
                 scheduleAiCompletion(newValue.text)
             }
 
             NoteEditorEvent.Undo -> {
                 if (undoStack.isNotEmpty()) {
                     redoStack.addLast(_uiState.value.content)
-                    _uiState.update { it.copy(content = undoStack.removeLast(), ghostText = "") }
+                    _uiState.update {
+                        it.copy(
+                            content = undoStack.removeLast(),
+                            ghostText = "",
+                        )
+                    }
                 }
             }
 
             NoteEditorEvent.Redo -> {
                 if (redoStack.isNotEmpty()) {
                     undoStack.addLast(_uiState.value.content)
-                    _uiState.update { it.copy(content = redoStack.removeLast(), ghostText = "") }
+                    _uiState.update {
+                        it.copy(
+                            content = redoStack.removeLast(),
+                            ghostText = "",
+                        )
+                    }
                 }
             }
 
@@ -191,17 +231,7 @@ class NoteEditorViewModel @Inject constructor(
             NoteEditorEvent.ApplyHeading -> applyLinePrefix("## ")
             NoteEditorEvent.ApplyBullet -> applyLinePrefix("- ")
 
-            // ── AI ghost text events ──────────────────────────────────────────
-
-            NoteEditorEvent.AcceptGhost -> {
-                val ghost = _uiState.value.ghostText
-                if (ghost.isBlank()) return
-                val current = _uiState.value.content
-                val newText = current.text + ghost
-                val newValue = TextFieldValue(newText, selection = TextRange(newText.length))
-                pushUndo(current)
-                _uiState.update { it.copy(content = newValue, ghostText = "") }
-            }
+            NoteEditorEvent.AcceptGhost -> acceptGhostInternal()
 
             NoteEditorEvent.DismissGhost -> {
                 aiJob?.cancel()
@@ -238,6 +268,7 @@ class NoteEditorViewModel @Inject constructor(
                     it.copy(
                         content = newValue,
                         ghostText = "",
+                        realTextLength = newValue.text.length,
                         showVariants = false,
                         variants = emptyList(),
                     )
@@ -250,7 +281,44 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    // ── AI trigger — debounced 400ms after typing stops ───────────────────────
+    // ── Accept ghost ──────────────────────────────────────────────────────────
+
+    private fun acceptGhostInternal() {
+        val state = _uiState.value
+        val ghost = state.ghostText
+        if (ghost.isBlank()) return
+        val current = state.content
+        val newText = current.text + ghost
+        val newValue = TextFieldValue(newText, selection = TextRange(newText.length))
+        pushUndo(current)
+        _uiState.update {
+            it.copy(
+                content = newValue,
+                ghostText = "",
+                realTextLength = newValue.text.length,
+            )
+        }
+    }
+
+    // ── Dismiss ghost and process keystroke ───────────────────────────────────
+
+    private fun clearGhostAndProcess(value: TextFieldValue) {
+        val current = _uiState.value.content
+        pushUndo(current)
+        redoStack.clear()
+        val newValue = handleBulletContinuation(current, value)
+        _uiState.update {
+            it.copy(
+                content = newValue,
+                ghostText = "",
+                realTextLength = newValue.text.length,
+                aiError = null,
+            )
+        }
+        scheduleAiCompletion(newValue.text)
+    }
+
+    // ── AI trigger ────────────────────────────────────────────────────────────
 
     private fun scheduleAiCompletion(text: String) {
         if (!aiEnabled) {
@@ -265,22 +333,23 @@ class NoteEditorViewModel @Inject constructor(
             _uiState.update { it.copy(isAiLoading = true, aiError = null) }
             getAiCompletion(text)
                 .onSuccess { suggestion ->
+                    val s = suggestion?.trim() ?: ""
                     _uiState.update {
                         it.copy(
-                            ghostText = suggestion ?: "",
+                            ghostText = s,
                             isAiLoading = false,
                         )
                     }
                 }
                 .onFailure { err ->
-                    val isNetworkError = err is java.net.UnknownHostException ||
+                    val isNetwork = err is java.net.UnknownHostException ||
                             err is java.net.SocketTimeoutException ||
                             err is java.net.ConnectException
                     _uiState.update {
                         it.copy(
                             ghostText = "",
                             isAiLoading = false,
-                            aiError = if (isNetworkError) "İnternet bağlantısı gerekli" else null,
+                            aiError = if (isNetwork) "İnternet bağlantısı gerekli" else null,
                         )
                     }
                 }
@@ -373,7 +442,11 @@ class NoteEditorViewModel @Inject constructor(
         pushUndo(current)
         skipNextUndoPush = true
         _uiState.update {
-            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)), ghostText = "")
+            it.copy(
+                content = TextFieldValue(newText, selection = TextRange(newCursor)),
+                ghostText = "",
+                realTextLength = newText.length,
+            )
         }
     }
 
@@ -401,7 +474,11 @@ class NoteEditorViewModel @Inject constructor(
         pushUndo(current)
         skipNextUndoPush = true
         _uiState.update {
-            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)), ghostText = "")
+            it.copy(
+                content = TextFieldValue(newText, selection = TextRange(newCursor)),
+                ghostText = "",
+                realTextLength = newText.length,
+            )
         }
     }
 

@@ -77,22 +77,39 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
             })
             put("generationConfig", JSONObject().apply {
                 if (candidateCount > 1) put("candidateCount", candidateCount)
-                put("maxOutputTokens", 60)
-                put("temperature", 0.7)
-                put("stopSequences", JSONArray().apply { put("\n") })
+                put("maxOutputTokens", 80)
+                put("temperature", 0.4)
             })
         }.toString()
     }
 
     private fun buildSinglePrompt(context: String): String =
-        """You are an inline writing assistant. Continue the text below with a short, natural completion (max 10 words). Return ONLY the continuation — no quotes, no explanation, no newlines.
+        """You are an autocomplete engine built into a note-taking app. Your only job is to continue the user's text naturally.
 
-Text: $context"""
+Rules:
+- Output ONLY the continuation text — no quotes, no explanation, no formatting
+- Maximum 10 words
+- Must flow naturally from the last word of the input
+- Never start with a space (the app adds spacing if needed)
+- Never repeat what was already written
+- If the text ends mid-sentence, complete that sentence
+- If the text ends with a complete sentence, start the next logical sentence
+- Never output newlines
+
+Input: $context
+Continuation:"""
 
     private fun buildVariantsPrompt(context: String): String =
-        """You are an inline writing assistant. Provide 3 different short continuations (max 10 words each) for the text below. Return each on its own line, numbered 1. 2. 3. — no other text.
+        """You are an autocomplete engine. Give 3 different short continuations for the text below.
 
-Text: $context"""
+Rules:
+- Each continuation max 10 words
+- Each on its own line, no numbering, no bullets
+- Each must flow naturally from the input
+- No quotes, no explanations
+
+Input: $context
+Continuations:"""
 
     // ── JSON parsers ──────────────────────────────────────────────────────────
 
@@ -106,7 +123,10 @@ Text: $context"""
                 .getJSONObject(0)
                 .getString("text")
                 .trim()
-            text.ifBlank { null }
+                .lines()
+                .firstOrNull()
+                ?.trim()
+            text?.ifBlank { null }
         } catch (_: Exception) {
             null
         }
@@ -114,21 +134,39 @@ Text: $context"""
 
     private fun extractAllCandidates(json: String): List<String> {
         return try {
-            val candidates = JSONObject(json).getJSONArray("candidates")
+            // With candidateCount > 1 the model returns multiple candidates
+            // BUT gemini-flash doesn't reliably support candidateCount,
+            // so we also handle single-candidate multi-line response as fallback
+            val root = JSONObject(json)
+            val candidates = root.getJSONArray("candidates")
+
             val results = mutableListOf<String>()
-            for (i in 0 until candidates.length()) {
-                val text = candidates.getJSONObject(i)
+
+            if (candidates.length() > 1) {
+                // Multiple candidates returned
+                for (i in 0 until candidates.length()) {
+                    val text = candidates.getJSONObject(i)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+                        .trim()
+                    if (text.isNotBlank()) results += text
+                }
+            } else {
+                // Single candidate — parse line by line
+                val raw = candidates.getJSONObject(0)
                     .getJSONObject("content")
                     .getJSONArray("parts")
                     .getJSONObject(0)
                     .getString("text")
-                    .trim()
-
-                // Strip leading "1. " / "2. " numbering if present
-                val cleaned = text.replace(Regex("""^\d+\.\s*"""), "").trim()
-                if (cleaned.isNotBlank()) results += cleaned
+                raw.lines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .forEach { results += it }
             }
-            results
+
+            results.take(3)
         } catch (_: Exception) {
             emptyList()
         }
