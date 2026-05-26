@@ -15,36 +15,19 @@ private const val TAG = "GeminiRepo"
 private const val CONNECT_TIMEOUT_MS = 5_000
 private const val READ_TIMEOUT_MS = 10_000
 private const val GEMINI_BASE =
-    "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+    "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent"
 
-// Priority order — first successful response wins
-private val MODEL_FALLBACK_CHAIN = listOf(
-    "gemini-2.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-2.5-flash-lite",
-)
+private const val GEMINI_MODEL = "gemini-2.5-flash"
 
 class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
 
     override suspend fun getCompletion(context: String): Result<String?> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val prompt = buildSinglePrompt(context)
-                var lastError: Exception? = null
-
-                for (model in MODEL_FALLBACK_CHAIN) {
-                    try {
-                        val raw = callGemini(model, prompt, candidateCount = 1)
-                        val result = extractFirstCandidate(raw)
-                        Log.d(TAG, "[$model] completion: $result")
-                        return@runCatching result
-                    } catch (e: Exception) {
-                        Log.w(TAG, "[$model] failed: ${e.message}")
-                        lastError = e
-                    }
-                }
-                throw lastError ?: Exception("All models failed")
+                val raw = callGemini(buildSinglePrompt(context), candidateCount = 1)
+                val result = extractFirstCandidate(raw)
+                Log.d(TAG, "completion: $result")
+                result
             }
         }
 
@@ -54,33 +37,17 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
     ): Result<List<String>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val prompt = buildVariantsPrompt(context)
-                var lastError: Exception? = null
-
-                for (model in MODEL_FALLBACK_CHAIN) {
-                    try {
-                        val raw = callGemini(model, prompt, candidateCount = 1)
-                        val results = extractAllCandidates(raw)
-                        if (results.isNotEmpty()) {
-                            Log.d(TAG, "[$model] variants: $results")
-                            return@runCatching results
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "[$model] variants failed: ${e.message}")
-                        lastError = e
-                    }
-                }
-                throw lastError ?: Exception("All models failed for variants")
+                val raw = callGemini(buildVariantsPrompt(context), candidateCount = 1)
+                val results = extractAllCandidates(raw)
+                Log.d(TAG, "variants: $results")
+                results
             }
         }
 
     // ── HTTP ──────────────────────────────────────────────────────────────────
 
-    private fun callGemini(model: String, prompt: String, candidateCount: Int): String {
-        val url = URL(GEMINI_BASE.format(model) + "?key=${BuildConfig.GEMINI_API_KEY}")
-        val body = buildRequestBody(prompt, candidateCount)
-
-        Log.d(TAG, "[$model] request body: $body")
+    private fun callGemini(prompt: String, candidateCount: Int): String {
+        val url = URL("$GEMINI_BASE?key=${BuildConfig.GEMINI_API_KEY}")
 
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -97,12 +64,12 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
             conn.inputStream.bufferedReader().readText()
         } else {
             val error = conn.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-            Log.e(TAG, "[$model] HTTP $responseCode: $error")
+            Log.e(TAG, "HTTP $responseCode: $error")
             throw Exception("HTTP $responseCode: $error")
         }
         conn.disconnect()
 
-        Log.d(TAG, "[$model] response: $responseBody")
+        Log.d(TAG, "response: $responseBody")
         return responseBody
     }
 
