@@ -66,7 +66,9 @@ class NoteEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(NoteEditorUiState(noteId = noteId))
     val uiState = _uiState.asStateFlow()
 
-    // ── Undo / Redo stack ─────────────────────────────────────────────────────
+    // Formatting buttons update state directly — skip undo push on next ContentChanged
+    private var skipNextUndoPush = false
+
     private val undoStack = ArrayDeque<TextFieldValue>()
     private val redoStack = ArrayDeque<TextFieldValue>()
     private val MAX_STACK = 100
@@ -92,9 +94,9 @@ class NoteEditorViewModel @Inject constructor(
                 .launchIn(viewModelScope)
         }
 
-        // Save on every content change — no debounce, only when text actually differs
+        // Save whenever text content actually changes
         _uiState
-            .drop(1) // skip initial emission
+            .drop(1)
             .map { it.content.text }
             .distinctUntilChanged()
             .onEach { save() }
@@ -104,9 +106,19 @@ class NoteEditorViewModel @Inject constructor(
     fun onEvent(event: NoteEditorEvent) {
         when (event) {
             is NoteEditorEvent.ContentChanged -> {
-                pushUndo(_uiState.value.content)
-                redoStack.clear()
-                _uiState.update { it.copy(content = event.value) }
+                val current = _uiState.value.content
+
+                if (skipNextUndoPush) {
+                    // Formatting button already pushed undo — don't double-push
+                    skipNextUndoPush = false
+                } else {
+                    pushUndo(current)
+                    redoStack.clear()
+                }
+
+                // Auto-continue bullet list on Enter
+                val newValue = handleBulletContinuation(current, event.value)
+                _uiState.update { it.copy(content = newValue) }
             }
 
             NoteEditorEvent.Undo -> {
@@ -127,9 +139,7 @@ class NoteEditorViewModel @Inject constructor(
                 val newPinState = !_uiState.value.isPinned
                 _uiState.update { it.copy(isPinned = newPinState) }
                 val id = _uiState.value.noteId
-                if (id != -1L) {
-                    viewModelScope.launch { pinNote(id, newPinState) }
-                }
+                if (id != -1L) viewModelScope.launch { pinNote(id, newPinState) }
             }
 
             NoteEditorEvent.DeleteNote -> {
@@ -148,14 +158,14 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    // ── Save logic ────────────────────────────────────────────────────────────
+    // ── Save ──────────────────────────────────────────────────────────────────
 
     private suspend fun save() {
         val state = _uiState.value
         if (state.isLoading || state.isDeleted) return
 
         val fullText = state.content.text.trim()
-        if (fullText.isBlank()) return // don't persist empty notes
+        if (fullText.isBlank()) return
 
         val lines = fullText.lines()
         val title = lines.firstOrNull()?.take(200) ?: ""
@@ -167,20 +177,54 @@ class NoteEditorViewModel @Inject constructor(
             val newId = createNote(title, body)
             _uiState.update { it.copy(noteId = newId, isSaving = false) }
         } else {
-            val existing = Note(
-                id = state.noteId,
-                title = title,
-                content = body,
-                createdAt = System.currentTimeMillis(), // overwritten by UpdateNoteUseCase
-                updatedAt = System.currentTimeMillis(),
-                isPinned = state.isPinned,
+            updateNote(
+                Note(
+                    id = state.noteId,
+                    title = title,
+                    content = body,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    isPinned = state.isPinned,
+                )
             )
-            updateNote(existing)
             _uiState.update { it.copy(isSaving = false) }
         }
     }
 
-    // ── Formatting helpers ────────────────────────────────────────────────────
+    // ── Bullet auto-continue ──────────────────────────────────────────────────
+
+    private fun handleBulletContinuation(
+        previous: TextFieldValue,
+        next: TextFieldValue,
+    ): TextFieldValue {
+        val prev = previous.text
+        val new = next.text
+        val cursor = next.selection.start
+
+        // Detect Enter press: new text is longer by 1 and the new char is \n
+        if (new.length != prev.length + 1) return next
+        if (cursor == 0 || new[cursor - 1] != '\n') return next
+
+        // Find the line that was just completed (before the new \n)
+        val lineStart = prev.lastIndexOf('\n', cursor - 2) + 1
+        val completedLine = prev.substring(lineStart, cursor - 1)
+
+        return if (completedLine.startsWith("- ")) {
+            if (completedLine.trim() == "-") {
+                // Empty bullet — remove bullet and stop list
+                val stripped = new.substring(0, cursor - 1) + "\n" + new.substring(cursor)
+                TextFieldValue(stripped, selection = TextRange(cursor))
+            } else {
+                // Continue bullet on next line
+                val inserted = new.substring(0, cursor) + "- " + new.substring(cursor)
+                TextFieldValue(inserted, selection = TextRange(cursor + 2))
+            }
+        } else {
+            next
+        }
+    }
+
+    // ── Inline format (bold / italic / underline) ─────────────────────────────
 
     private fun applyInlineFormat(marker: String) {
         val current = _uiState.value.content
@@ -192,19 +236,26 @@ class NoteEditorViewModel @Inject constructor(
 
         if (sel.length > 0) {
             val selected = text.substring(sel.start, sel.end)
-            newText = text.substring(0, sel.start) + "$marker$selected$marker" +
+            newText = text.substring(0, sel.start) +
+                    "$marker$selected$marker" +
                     text.substring(sel.end)
             newCursor = sel.end + marker.length * 2
         } else {
-            newText = text.substring(0, sel.start) + "$marker$marker" +
+            // No selection — insert marker pair and place cursor inside
+            newText = text.substring(0, sel.start) +
+                    "$marker$marker" +
                     text.substring(sel.start)
             newCursor = sel.start + marker.length
         }
 
-        val newValue = TextFieldValue(newText, selection = TextRange(newCursor))
         pushUndo(current)
-        _uiState.update { it.copy(content = newValue) }
+        skipNextUndoPush = true
+        _uiState.update {
+            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)))
+        }
     }
+
+    // ── Line prefix (heading / bullet) ───────────────────────────────────────
 
     private fun applyLinePrefix(prefix: String) {
         val current = _uiState.value.content
@@ -225,18 +276,20 @@ class NoteEditorViewModel @Inject constructor(
             newCursor = cursor + prefix.length
         }
 
-        val newValue = TextFieldValue(newText, selection = TextRange(newCursor))
         pushUndo(current)
-        _uiState.update { it.copy(content = newValue) }
+        skipNextUndoPush = true
+        _uiState.update {
+            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)))
+        }
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun pushUndo(value: TextFieldValue) {
         if (undoStack.size >= MAX_STACK) undoStack.removeFirst()
         undoStack.addLast(value)
     }
 
-    private fun buildDisplayText(note: Note): String {
-        return if (note.content.isBlank()) note.title
-        else "${note.title}\n${note.content}"
-    }
+    private fun buildDisplayText(note: Note): String =
+        if (note.content.isBlank()) note.title else "${note.title}\n${note.content}"
 }
