@@ -8,7 +8,8 @@ plugins {
 }
 
 // Read local.properties safely
-val localProps = java.util.Properties().apply {
+import java.util.Properties
+val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) load(f.inputStream())
 }
