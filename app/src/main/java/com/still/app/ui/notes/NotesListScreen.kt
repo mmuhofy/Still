@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material3.DropdownMenu
@@ -78,7 +77,6 @@ fun NotesListScreen(
                     )
                 },
                 actions = {
-                    // Search
                     IconButton(onClick = onSearchClick) {
                         Icon(
                             Icons.Outlined.Search,
@@ -86,8 +84,6 @@ fun NotesListScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-
-                    // Sort
                     Box {
                         IconButton(onClick = { sortMenuExpanded = true }) {
                             Icon(
@@ -106,8 +102,6 @@ fun NotesListScreen(
                             onDismiss = { sortMenuExpanded = false },
                         )
                     }
-
-                    // View mode toggle
                     IconButton(
                         onClick = {
                             val next = if (state.viewMode == NoteViewMode.CARD)
@@ -119,15 +113,6 @@ fun NotesListScreen(
                             imageVector = if (state.viewMode == NoteViewMode.CARD)
                                 Icons.Outlined.ViewList else Icons.Outlined.GridView,
                             contentDescription = "Görünümü değiştir",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    // Settings
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            Icons.Outlined.Settings,
-                            contentDescription = "Ayarlar",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -152,7 +137,6 @@ fun NotesListScreen(
         },
     ) { innerPadding ->
 
-        // Loading — skeleton or just blank
         if (state.isLoading) return@Scaffold
 
         val allEmpty = state.pinnedNotes.isEmpty() && state.unpinnedNotes.isEmpty()
@@ -180,7 +164,6 @@ fun NotesListScreen(
                 )
             }
 
-            // Calm Luxury snackbar — floats above FAB
             StillSnackbar(
                 visible = state.pendingDeleteNote != null,
                 message = "Not silindi",
@@ -188,12 +171,11 @@ fun NotesListScreen(
                 onDismiss = { viewModel.onEvent(NotesListEvent.ConfirmDelete) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 72.dp), // above FAB
+                    .padding(bottom = 72.dp),
             )
         }
     }
 
-    // Context menu — long press
     if (contextMenuNote != null) {
         val note = (state.pinnedNotes + state.unpinnedNotes)
             .firstOrNull { it.id == contextMenuNote }
@@ -228,18 +210,15 @@ private fun NotesList(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             top = innerPadding.calculateTopPadding() + 8.dp,
-            bottom = innerPadding.calculateBottomPadding() + 88.dp, // FAB clearance
-            start = if (state.viewMode == NoteViewMode.CARD) 16.dp else 16.dp,
-            end = if (state.viewMode == NoteViewMode.CARD) 16.dp else 16.dp,
+            bottom = innerPadding.calculateBottomPadding() + 88.dp,
+            start = 16.dp,
+            end = 16.dp,
         ),
         verticalArrangement = if (state.viewMode == NoteViewMode.CARD)
             Arrangement.spacedBy(10.dp) else Arrangement.Top,
     ) {
-        // Pinned section
         if (state.pinnedNotes.isNotEmpty()) {
-            item {
-                SectionLabel(text = "Sabitlenmiş")
-            }
+            item { SectionLabel(text = "Sabitlenmiş") }
             items(state.pinnedNotes, key = { it.id }) { note ->
                 NoteItem(
                     note = note,
@@ -256,7 +235,6 @@ private fun NotesList(
             }
         }
 
-        // Unpinned notes
         items(state.unpinnedNotes, key = { it.id }) { note ->
             NoteItem(
                 note = note,
@@ -377,8 +355,6 @@ private fun NoteContextMenu(
     onPin: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    // Rendered as a simple DropdownMenu anchored to Box at origin.
-    // Full bottom sheet context menu comes in polish pass.
     Box {
         DropdownMenu(
             expanded = true,
