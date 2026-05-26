@@ -31,13 +31,13 @@
 
 ### 🧠 Domain Layer
 
-- 🟢 GetAllNotesUseCase`
-- 🟢 GetNoteByIdUseCase`
-- 🟢 CreateNoteUseCase`
-- 🟢 UpdateNoteUseCase`
-- 🟢 DeleteNoteUseCase`
+- 🟢 `GetAllNotesUseCase`
+- 🟢 `GetNoteByIdUseCase`
+- 🟢 `CreateNoteUseCase`
+- 🟢 `UpdateNoteUseCase`
+- 🟢 `DeleteNoteUseCase`
 - 🟢 `PinNoteUseCase`
-- 🟢 SearchNotesUseCase`
+- 🟢 `SearchNotesUseCase`
 
 ### 🎨 Theme
 
@@ -57,7 +57,7 @@
 ### 📱 UI — Notes List
 
 - 🟢 `NotesListScreen` — scaffold, FAB, top bar with search icon
-- 🟢 NotesListViewModel` — load notes, handle pin/delete actions
+- 🟢 `NotesListViewModel` — load notes, handle pin/delete actions
 - 🟢 Card view component — title, 2-line preview, date, pin indicator
 - 🟢 List view component — title, 1-line preview, date, pin indicator
 - 🟢 Card / List toggle (icon in top bar, persisted in DataStore)
@@ -68,10 +68,10 @@
 
 ### 📱 UI — Note Editor
 
-- 🟢 NoteEditorScreen` — full-screen, back button, `···` overflow menu
-- 🟢`NoteEditorViewModel` — load note, autosave, undo/redo stack
+- 🟢 `NoteEditorScreen` — full-screen, back button, `···` overflow menu
+- 🟢 `NoteEditorViewModel` — load note, autosave, undo/redo stack
 - 🟢 First line = title (larger weight, subtle divider below)
-- 🟢 Silent autosave — debounced 1s after last keystroke
+- 🟢 Silent autosave — triggers instantly on content change (distinctUntilChanged)
 - 🟢 Formatting toolbar above keyboard (Bold, Italic, Underline, Heading, Bullet list)
 - 🟢 Toolbar rises with keyboard, stays fixed
 - 🟢 Undo / Redo in toolbar
@@ -81,33 +81,40 @@
 ### 📱 UI — Search
 
 - 🟢 `SearchScreen` — full-screen overlay, activated from Notes list icon
-- 🟢 SearchViewModel` — real-time search as user types
+- 🟢 `SearchViewModel` — real-time search as user types
 - 🟢 Results list — same card style as Notes list
 - 🟢 Empty state for no results
 - 🟢 Tap result → opens Note Editor
 
 ### 📱 UI — Settings
 
-- 🟢 SettingsScreen` — grouped list
+- 🟢 `SettingsScreen` — grouped list
 - 🟢 Appearance group: Theme (Calm Luxury only in Phase 1), Dark/Light toggle
 - 🟢 Writing group: (placeholder for Phase 2 features, all OFF)
 - 🟢 About group: app version, licenses
 
 ### ✅ Phase 1 Complete When
-- [ ] Can create, edit, delete, pin notes
-- [ ] Autosave works silently
-- [ ] Card and List view both work
-- [ ] Search returns real-time results
-- [ ] Onboarding shown once on first launch
-- [ ] Theme follows system dark/light
-- [ ] Undo/Redo works in editor
-- [ ] Formatting toolbar works with keyboard
+
+- [x] Can create, edit, delete, pin notes
+- [x] Autosave works silently
+- [x] Card and List view both work
+- [x] Search returns real-time results
+- [x] Onboarding shown once on first launch
+- [x] Theme follows system dark/light
+- [x] Undo/Redo works in editor
+- [x] Formatting toolbar renders markdown visually (bold, italic, underline, heading, bullet)
+
+---
+
+## 🐛 Known Bugs (Phase 1 — deferred)
+
+- ⛔ Formatting toolbar buttons not working reliably — state conflict between toolbar actions and `ContentChanged` event, italic regex collision, selection loss after format apply. Deferred to post-Phase 2.
 
 ---
 
 ## Phase 2 — Experience
 
-- 🔴 AI inline completion (Gemini API integration)
+- 🔴 AI inline completion (Gemini API integration — `gemini-3.1-flash-lite`)
 - 🔴 Ghost text rendering in editor
 - 🔴 Accept on tap, variants on long-press
 - 🔴 No-internet graceful degradation for AI
@@ -140,15 +147,8 @@
 
 ---
 
-## Bugs
-
-*None yet — project not started.*
-
----
-
 ## Notes & Blockers
 
 - Room 3.0 is in alpha — revisit when stable, currently using 2.8.4
 - Google Drive sync deferred to Phase 4 due to API complexity
 - App icon final design pending
-- Default accent color pending decision
