@@ -22,61 +22,61 @@
 
 ### 🗄️ Data Layer
 
-- 🔴 Define `Note` entity (Room) — `id`, `title`, `content`, `createdAt`, `updatedAt`, `isPinned`
-- 🔴 Create `NoteDao` — insert, update, delete, getAll, getById, search
-- 🔴 Create `StillDatabase` — Room database class
-- 🔴 Define `NoteRepository` interface in `domain/`
-- 🔴 Implement `NoteRepositoryImpl` in `data/`
-- 🔴 Create Hilt module to bind repository
+- 🟢 Define `Note` entity (Room) — `id`, `title`, `content`, `createdAt`, `updatedAt`, `isPinned`
+- 🟢 Create `NoteDao` — insert, update, delete, getAll, getById, search
+- 🟢 Create `StillDatabase` — Room database class
+- 🟢 Define `NoteRepository` interface in `domain/`
+- 🟢 Implement `NoteRepositoryImpl` in `data/`
+- 🟢 Create Hilt module to bind repository
 
 ### 🧠 Domain Layer
 
-- 🔴 `GetAllNotesUseCase`
-- 🔴 `GetNoteByIdUseCase`
-- 🔴 `CreateNoteUseCase`
-- 🔴 `UpdateNoteUseCase`
-- 🔴 `DeleteNoteUseCase`
-- 🔴 `PinNoteUseCase`
-- 🔴 `SearchNotesUseCase`
+- 🟢 GetAllNotesUseCase`
+- 🟢 GetNoteByIdUseCase`
+- 🟢 CreateNoteUseCase`
+- 🟢 UpdateNoteUseCase`
+- 🟢 DeleteNoteUseCase`
+- 🟢 `PinNoteUseCase`
+- 🟢 SearchNotesUseCase`
 
 ### 🎨 Theme
 
-- 🔴 Define Calm Luxury color palette (dark + light)
-- 🔴 Define typography scale (title serif-weight, body, caption)
-- 🔴 Define shape scheme
-- 🔴 Wire theme to system dark/light setting
+- 🟢 Define Calm Luxury color palette (dark + light)
+- 🟢 Define typography scale (title serif-weight, body, caption)
+- 🟢 Define shape scheme
+- 🟢 Wire theme to system dark/light setting
 
 ### 📱 UI — Onboarding
 
-- 🔴 Onboarding screen 1: Visual theme selection (Calm Luxury default)
-- 🔴 Onboarding screen 2: Dark/Light confirm (pre-selected based on system)
-- 🔴 Onboarding screen 3: Feature mode — "Sade başla" vs "AI ile başla"
-- 🔴 Save onboarding state to DataStore — never show again after completion
-- 🔴 Wire onboarding to app start navigation
+- 🟢 Onboarding screen 1: Visual theme selection (Calm Luxury default)
+- 🟢 Onboarding screen 2: Dark/Light confirm (pre-selected based on system)
+- 🟢 Onboarding screen 3: Feature mode — "Sade başla" vs "AI ile başla"
+- 🟢 Save onboarding state to DataStore — never show again after completion
+- 🟢 Wire onboarding to app start navigation
 
 ### 📱 UI — Notes List
 
-- 🔴 `NotesListScreen` — scaffold, FAB, top bar with search icon
-- 🔴 `NotesListViewModel` — load notes, handle pin/delete actions
-- 🔴 Card view component — title, 2-line preview, date, pin indicator
-- 🔴 List view component — title, 1-line preview, date, pin indicator
-- 🔴 Card / List toggle (icon in top bar, persisted in DataStore)
-- 🔴 Pinned section (appears above regular notes when any note is pinned)
-- 🔴 Swipe-to-delete on note card (with confirmation bottom sheet)
-- 🔴 Swipe-to-pin on note card
-- 🔴 Empty state — friendly message when no notes
+- 🟢 `NotesListScreen` — scaffold, FAB, top bar with search icon
+- 🟢 NotesListViewModel` — load notes, handle pin/delete actions
+- 🟢 Card view component — title, 2-line preview, date, pin indicator
+- 🟢 List view component — title, 1-line preview, date, pin indicator
+- 🟢 Card / List toggle (icon in top bar, persisted in DataStore)
+- 🟢 Pinned section (appears above regular notes when any note is pinned)
+- 🟢 Swipe-to-delete on note card (with confirmation bottom sheet)
+- 🟢 Swipe-to-pin on note card
+- 🟢 Empty state — friendly message when no notes
 
 ### 📱 UI — Note Editor
 
-- 🔴 `NoteEditorScreen` — full-screen, back button, `···` overflow menu
-- 🔴 `NoteEditorViewModel` — load note, autosave, undo/redo stack
-- 🔴 First line = title (larger weight, subtle divider below)
-- 🔴 Silent autosave — debounced 1s after last keystroke
-- 🔴 Formatting toolbar above keyboard (Bold, Italic, Underline, Heading, Bullet list)
-- 🔴 Toolbar rises with keyboard, stays fixed
-- 🔴 Undo / Redo in toolbar
-- 🔴 Overflow menu (`···`): Pin/Unpin, Delete, Share (placeholder)
-- 🔴 Delete with confirmation bottom sheet
+- 🟢 NoteEditorScreen` — full-screen, back button, `···` overflow menu
+- 🟢`NoteEditorViewModel` — load note, autosave, undo/redo stack
+- 🟢 First line = title (larger weight, subtle divider below)
+- 🟢 Silent autosave — debounced 1s after last keystroke
+- 🟢 Formatting toolbar above keyboard (Bold, Italic, Underline, Heading, Bullet list)
+- 🟢 Toolbar rises with keyboard, stays fixed
+- 🟢 Undo / Redo in toolbar
+- 🟢 Overflow menu (`···`): Pin/Unpin, Delete, Share (placeholder)
+- 🟢 Delete with confirmation bottom sheet
 
 ### 📱 UI — Search
 
