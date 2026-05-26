@@ -5,6 +5,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,3 +52,4 @@ jobs:
           name: still-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/**.apk
           retention-days: 7
+          
