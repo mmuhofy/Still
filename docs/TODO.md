@@ -80,18 +80,18 @@
 
 ### 📱 UI — Search
 
-- 🔴 `SearchScreen` — full-screen overlay, activated from Notes list icon
-- 🔴 `SearchViewModel` — real-time search as user types
-- 🔴 Results list — same card style as Notes list
-- 🔴 Empty state for no results
-- 🔴 Tap result → opens Note Editor
+- 🟢 `SearchScreen` — full-screen overlay, activated from Notes list icon
+- 🟢 SearchViewModel` — real-time search as user types
+- 🟢 Results list — same card style as Notes list
+- 🟢 Empty state for no results
+- 🟢 Tap result → opens Note Editor
 
 ### 📱 UI — Settings
 
-- 🔴 `SettingsScreen` — grouped list
-- 🔴 Appearance group: Theme (Calm Luxury only in Phase 1), Dark/Light toggle
-- 🔴 Writing group: (placeholder for Phase 2 features, all OFF)
-- 🔴 About group: app version, licenses
+- 🟢 SettingsScreen` — grouped list
+- 🟢 Appearance group: Theme (Calm Luxury only in Phase 1), Dark/Light toggle
+- 🟢 Writing group: (placeholder for Phase 2 features, all OFF)
+- 🟢 About group: app version, licenses
 
 ### ✅ Phase 1 Complete When
 - [ ] Can create, edit, delete, pin notes
@@ -107,7 +107,7 @@
 
 ## Phase 2 — Experience
 
-- 🔴 AI inline completion (Anthropic API integration)
+- 🔴 AI inline completion (Gemini API integration)
 - 🔴 Ghost text rendering in editor
 - 🔴 Accept on tap, variants on long-press
 - 🔴 No-internet graceful degradation for AI

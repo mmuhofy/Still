@@ -44,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.TextFieldValue
@@ -60,7 +62,7 @@ fun NoteEditorScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var overflowExpanded by remember { mutableStateOf(false) }
-    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
@@ -169,7 +171,7 @@ fun NoteEditorScreen(
 private fun NoteTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
-    focusRequester: androidx.compose.ui.focus.FocusRequester,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val headingFontSize = MaterialTheme.typography.headlineSmall.fontSize
