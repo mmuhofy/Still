@@ -10,7 +10,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
 
-private const val GEMINI_MODEL = "gemini-2.0-flash-lite"
+private const val GEMINI_MODEL = "gemini-flash-latest"
 private const val GEMINI_BASE_URL =
     "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent"
 private const val CONNECT_TIMEOUT_MS = 5_000
