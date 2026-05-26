@@ -1,7 +1,6 @@
 package com.still.app.ui.settings
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -22,14 +22,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.remember
-import androidx.compose.material3.ExperimentalMaterial3Api
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +40,9 @@ fun SettingsScreen(
     val appVersion = remember {
         try {
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "—"
-        } catch (_: Exception) { "—" }
+        } catch (_: Exception) {
+            "—"
+        }
     }
 
     Scaffold(
@@ -70,7 +71,6 @@ fun SettingsScreen(
             // ── Appearance ────────────────────────────────────────────────────
             SettingsSectionHeader("Görünüm")
 
-            // Color scheme selector
             SettingsItem(label = "Tema modu") {
                 ColorSchemeSelector(
                     current = uiState.colorScheme,
@@ -228,4 +228,3 @@ private fun SettingsDivider() {
         thickness = 0.5.dp,
     )
 }
-None
