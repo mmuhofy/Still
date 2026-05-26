@@ -19,11 +19,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.still.app.ui.components.BottomNavTab
 import com.still.app.ui.components.StillBottomNav
 import com.still.app.ui.editor.NoteEditorScreen
 import com.still.app.ui.notes.NotesListScreen
 import com.still.app.ui.onboarding.OnboardingScreen
+import com.still.app.ui.search.SearchScreen
+import com.still.app.ui.settings.SettingsScreen
 import com.still.app.util.Constants
 import kotlinx.coroutines.flow.first
 
@@ -71,7 +72,6 @@ fun StillNavHost(
                     currentRoute = currentRoute,
                     onTabSelected = { tab ->
                         navController.navigate(tab.route) {
-                            // Pop up to notes list to avoid back stack buildup
                             popUpTo(Routes.NOTES_LIST) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
@@ -118,11 +118,16 @@ fun StillNavHost(
             }
 
             composable(Routes.SEARCH) {
-                // Placeholder — SearchScreen added in search step
+                SearchScreen(
+                    onNoteClick = { noteId ->
+                        navController.navigate(Routes.noteEditor(noteId))
+                    },
+                    onBack = { navController.popBackStack() },
+                )
             }
 
             composable(Routes.SETTINGS) {
-                // Placeholder — SettingsScreen added in settings step
+                SettingsScreen()
             }
         }
     }
