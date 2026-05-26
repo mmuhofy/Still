@@ -2,18 +2,28 @@ package com.still.app.ui.editor
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.still.app.domain.model.Note
 import com.still.app.domain.usecase.CreateNoteUseCase
 import com.still.app.domain.usecase.DeleteNoteUseCase
+import com.still.app.domain.usecase.GetAiCompletionUseCase
+import com.still.app.domain.usecase.GetAiCompletionVariantsUseCase
 import com.still.app.domain.usecase.GetNoteByIdUseCase
 import com.still.app.domain.usecase.PinNoteUseCase
 import com.still.app.domain.usecase.UpdateNoteUseCase
 import com.still.app.ui.navigation.Routes
+import com.still.app.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -21,8 +31,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 // ── UI State ──────────────────────────────────────────────────────────────────
@@ -34,6 +45,12 @@ data class NoteEditorUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val isDeleted: Boolean = false,
+    // AI ghost text
+    val ghostText: String = "",
+    val isAiLoading: Boolean = false,
+    val aiError: String? = null,         // shown inline, not as dialog
+    val showVariants: Boolean = false,
+    val variants: List<String> = emptyList(),
 )
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -49,6 +66,11 @@ sealed interface NoteEditorEvent {
     data object ApplyBullet : NoteEditorEvent
     data object Undo : NoteEditorEvent
     data object Redo : NoteEditorEvent
+    data object AcceptGhost : NoteEditorEvent        // tap ghost text
+    data object DismissGhost : NoteEditorEvent       // continue typing
+    data object RequestVariants : NoteEditorEvent    // long-press ghost text
+    data class AcceptVariant(val text: String) : NoteEditorEvent
+    data object DismissVariants : NoteEditorEvent
 }
 
 @HiltViewModel
@@ -59,6 +81,9 @@ class NoteEditorViewModel @Inject constructor(
     private val updateNote: UpdateNoteUseCase,
     private val deleteNote: DeleteNoteUseCase,
     private val pinNote: PinNoteUseCase,
+    private val getAiCompletion: GetAiCompletionUseCase,
+    private val getAiVariants: GetAiCompletionVariantsUseCase,
+    private val dataStore: DataStore<Preferences>,
 ) : ViewModel() {
 
     private val noteId: Long = savedStateHandle[Routes.ARG_NOTE_ID] ?: -1L
@@ -66,8 +91,18 @@ class NoteEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(NoteEditorUiState(noteId = noteId))
     val uiState = _uiState.asStateFlow()
 
-    // Formatting buttons update state directly — skip undo push on next ContentChanged
+    // AI enabled preference
+    private val aiEnabledFlow = dataStore.data
+        .map { it[booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)] ?: false }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val aiEnabled get() = aiEnabledFlow.value
+
+    // Formatting flag — skip double undo push
     private var skipNextUndoPush = false
+
+    // AI debounce job
+    private var aiJob: Job? = null
 
     private val undoStack = ArrayDeque<TextFieldValue>()
     private val redoStack = ArrayDeque<TextFieldValue>()
@@ -94,7 +129,7 @@ class NoteEditorViewModel @Inject constructor(
                 .launchIn(viewModelScope)
         }
 
-        // Save whenever text content actually changes
+        // Save on content change
         _uiState
             .drop(1)
             .map { it.content.text }
@@ -109,37 +144,37 @@ class NoteEditorViewModel @Inject constructor(
                 val current = _uiState.value.content
 
                 if (skipNextUndoPush) {
-                    // Formatting button already pushed undo — don't double-push
                     skipNextUndoPush = false
                 } else {
                     pushUndo(current)
                     redoStack.clear()
                 }
 
-                // Auto-continue bullet list on Enter
                 val newValue = handleBulletContinuation(current, event.value)
-                _uiState.update { it.copy(content = newValue) }
+                _uiState.update { it.copy(content = newValue, ghostText = "", aiError = null) }
+
+                scheduleAiCompletion(newValue.text)
             }
 
             NoteEditorEvent.Undo -> {
                 if (undoStack.isNotEmpty()) {
                     redoStack.addLast(_uiState.value.content)
-                    _uiState.update { it.copy(content = undoStack.removeLast()) }
+                    _uiState.update { it.copy(content = undoStack.removeLast(), ghostText = "") }
                 }
             }
 
             NoteEditorEvent.Redo -> {
                 if (redoStack.isNotEmpty()) {
                     undoStack.addLast(_uiState.value.content)
-                    _uiState.update { it.copy(content = redoStack.removeLast()) }
+                    _uiState.update { it.copy(content = redoStack.removeLast(), ghostText = "") }
                 }
             }
 
             NoteEditorEvent.TogglePin -> {
-                val newPinState = !_uiState.value.isPinned
-                _uiState.update { it.copy(isPinned = newPinState) }
+                val newPin = !_uiState.value.isPinned
+                _uiState.update { it.copy(isPinned = newPin) }
                 val id = _uiState.value.noteId
-                if (id != -1L) viewModelScope.launch { pinNote(id, newPinState) }
+                if (id != -1L) viewModelScope.launch { pinNote(id, newPin) }
             }
 
             NoteEditorEvent.DeleteNote -> {
@@ -155,6 +190,97 @@ class NoteEditorViewModel @Inject constructor(
             NoteEditorEvent.ApplyUnderline -> applyInlineFormat("__")
             NoteEditorEvent.ApplyHeading -> applyLinePrefix("## ")
             NoteEditorEvent.ApplyBullet -> applyLinePrefix("- ")
+
+            // ── AI ghost text events ──────────────────────────────────────────
+
+            NoteEditorEvent.AcceptGhost -> {
+                val ghost = _uiState.value.ghostText
+                if (ghost.isBlank()) return
+                val current = _uiState.value.content
+                val newText = current.text + ghost
+                val newValue = TextFieldValue(newText, selection = TextRange(newText.length))
+                pushUndo(current)
+                _uiState.update { it.copy(content = newValue, ghostText = "") }
+            }
+
+            NoteEditorEvent.DismissGhost -> {
+                aiJob?.cancel()
+                _uiState.update { it.copy(ghostText = "", isAiLoading = false) }
+            }
+
+            NoteEditorEvent.RequestVariants -> {
+                val context = _uiState.value.content.text
+                if (context.isBlank()) return
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isAiLoading = true) }
+                    getAiVariants(context, Constants.AI_COMPLETION_VARIANTS)
+                        .onSuccess { variants ->
+                            _uiState.update {
+                                it.copy(
+                                    variants = variants,
+                                    showVariants = variants.isNotEmpty(),
+                                    isAiLoading = false,
+                                )
+                            }
+                        }
+                        .onFailure {
+                            _uiState.update { it.copy(isAiLoading = false) }
+                        }
+                }
+            }
+
+            is NoteEditorEvent.AcceptVariant -> {
+                val current = _uiState.value.content
+                val newText = current.text + event.text
+                val newValue = TextFieldValue(newText, selection = TextRange(newText.length))
+                pushUndo(current)
+                _uiState.update {
+                    it.copy(
+                        content = newValue,
+                        ghostText = "",
+                        showVariants = false,
+                        variants = emptyList(),
+                    )
+                }
+            }
+
+            NoteEditorEvent.DismissVariants -> {
+                _uiState.update { it.copy(showVariants = false, variants = emptyList()) }
+            }
+        }
+    }
+
+    // ── AI trigger — debounced 400ms after typing stops ───────────────────────
+
+    private fun scheduleAiCompletion(text: String) {
+        if (!aiEnabled) return
+        if (text.isBlank()) return
+
+        aiJob?.cancel()
+        aiJob = viewModelScope.launch {
+            delay(Constants.AI_TRIGGER_DEBOUNCE_MS)
+            _uiState.update { it.copy(isAiLoading = true, aiError = null) }
+            getAiCompletion(text)
+                .onSuccess { suggestion ->
+                    _uiState.update {
+                        it.copy(
+                            ghostText = suggestion ?: "",
+                            isAiLoading = false,
+                        )
+                    }
+                }
+                .onFailure { err ->
+                    val isNetworkError = err is java.net.UnknownHostException ||
+                            err is java.net.SocketTimeoutException ||
+                            err is java.net.ConnectException
+                    _uiState.update {
+                        it.copy(
+                            ghostText = "",
+                            isAiLoading = false,
+                            aiError = if (isNetworkError) "İnternet bağlantısı gerekli" else null,
+                        )
+                    }
+                }
         }
     }
 
@@ -201,21 +327,17 @@ class NoteEditorViewModel @Inject constructor(
         val new = next.text
         val cursor = next.selection.start
 
-        // Detect Enter press: new text is longer by 1 and the new char is \n
         if (new.length != prev.length + 1) return next
         if (cursor == 0 || new[cursor - 1] != '\n') return next
 
-        // Find the line that was just completed (before the new \n)
         val lineStart = prev.lastIndexOf('\n', cursor - 2) + 1
         val completedLine = prev.substring(lineStart, cursor - 1)
 
         return if (completedLine.startsWith("- ")) {
             if (completedLine.trim() == "-") {
-                // Empty bullet — remove bullet and stop list
                 val stripped = new.substring(0, cursor - 1) + "\n" + new.substring(cursor)
                 TextFieldValue(stripped, selection = TextRange(cursor))
             } else {
-                // Continue bullet on next line
                 val inserted = new.substring(0, cursor) + "- " + new.substring(cursor)
                 TextFieldValue(inserted, selection = TextRange(cursor + 2))
             }
@@ -224,7 +346,7 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    // ── Inline format (bold / italic / underline) ─────────────────────────────
+    // ── Inline format ─────────────────────────────────────────────────────────
 
     private fun applyInlineFormat(marker: String) {
         val current = _uiState.value.content
@@ -236,14 +358,11 @@ class NoteEditorViewModel @Inject constructor(
 
         if (sel.length > 0) {
             val selected = text.substring(sel.start, sel.end)
-            newText = text.substring(0, sel.start) +
-                    "$marker$selected$marker" +
+            newText = text.substring(0, sel.start) + "$marker$selected$marker" +
                     text.substring(sel.end)
             newCursor = sel.end + marker.length * 2
         } else {
-            // No selection — insert marker pair and place cursor inside
-            newText = text.substring(0, sel.start) +
-                    "$marker$marker" +
+            newText = text.substring(0, sel.start) + "$marker$marker" +
                     text.substring(sel.start)
             newCursor = sel.start + marker.length
         }
@@ -251,11 +370,11 @@ class NoteEditorViewModel @Inject constructor(
         pushUndo(current)
         skipNextUndoPush = true
         _uiState.update {
-            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)))
+            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)), ghostText = "")
         }
     }
 
-    // ── Line prefix (heading / bullet) ───────────────────────────────────────
+    // ── Line prefix ───────────────────────────────────────────────────────────
 
     private fun applyLinePrefix(prefix: String) {
         val current = _uiState.value.content
@@ -279,7 +398,7 @@ class NoteEditorViewModel @Inject constructor(
         pushUndo(current)
         skipNextUndoPush = true
         _uiState.update {
-            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)))
+            it.copy(content = TextFieldValue(newText, selection = TextRange(newCursor)), ghostText = "")
         }
     }
 

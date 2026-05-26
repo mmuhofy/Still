@@ -1,5 +1,7 @@
 package com.still.app.ui.editor
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.FormatBold
 import androidx.compose.material.icons.outlined.FormatItalic
 import androidx.compose.material.icons.outlined.FormatListBulleted
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.outlined.FormatUnderlined
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Title
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,11 +35,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,11 +55,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.still.app.util.MarkdownRenderer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +74,7 @@ fun NoteEditorScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var overflowExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val variantsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
@@ -89,6 +101,16 @@ fun NoteEditorScreen(
                 },
                 title = {},
                 actions = {
+                    // AI loading indicator
+                    if (state.isAiLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(end = 4.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     IconButton(onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin) }) {
                         Icon(
                             imageVector = Icons.Outlined.PushPin,
@@ -155,7 +177,11 @@ fun NoteEditorScreen(
         ) {
             NoteTextField(
                 value = state.content,
+                ghostText = state.ghostText,
+                aiError = state.aiError,
                 onValueChange = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
+                onAcceptGhost = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
+                onLongPressGhost = { viewModel.onEvent(NoteEditorEvent.RequestVariants) },
                 focusRequester = focusRequester,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -163,69 +189,150 @@ fun NoteEditorScreen(
             )
         }
     }
+
+    // Variants bottom sheet
+    if (state.showVariants) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.onEvent(NoteEditorEvent.DismissVariants) },
+            sheetState = variantsSheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    text = "Alternatifler",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                state.variants.forEach { variant ->
+                    TextButton(
+                        onClick = { viewModel.onEvent(NoteEditorEvent.AcceptVariant(variant)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = variant,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                Spacer(Modifier.padding(bottom = 16.dp))
+            }
+        }
+    }
 }
 
 // ── Text Field ────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NoteTextField(
     value: TextFieldValue,
+    ghostText: String,
+    aiError: String?,
     onValueChange: (TextFieldValue) -> Unit,
+    onAcceptGhost: () -> Unit,
+    onLongPressGhost: () -> Unit,
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    val headingFontSize = MaterialTheme.typography.headlineSmall.fontSize
-    val bodyFontSize = MaterialTheme.typography.bodyLarge.fontSize
+    val text = value.text
+    val firstNewline = text.indexOf('\n')
+    val titleEnd = if (firstNewline == -1) text.length else firstNewline
 
-    // Render markdown → AnnotatedString for display
-    val rendered = remember(value.text) {
-        MarkdownRenderer.render(
-            raw = value.text,
-            headingFontSize = headingFontSize,
-            bodyFontSize = bodyFontSize,
-        )
-    }
-
-    // Compose BasicTextField accepts TextFieldValue with AnnotatedString
-    val styledValue = remember(rendered, value.selection, value.composition) {
-        TextFieldValue(
-            annotatedString = rendered,
-            selection = value.selection,
-            composition = value.composition,
-        )
-    }
-
-    BasicTextField(
-        value = styledValue,
-        onValueChange = { newValue ->
-            // Pass through as plain-text TextFieldValue to ViewModel
-            // so raw markdown is preserved in storage
-            onValueChange(
-                TextFieldValue(
-                    text = newValue.text,
-                    selection = newValue.selection,
-                    composition = newValue.composition,
+    // Build annotated string: title bold + body normal + ghost italic
+    val annotated = buildAnnotatedString {
+        if (titleEnd > 0) {
+            withStyle(
+                SpanStyle(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = MaterialTheme.typography.headlineSmall.fontSize,
                 )
-            )
-        },
-        modifier = modifier.focusRequester(focusRequester),
-        textStyle = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onBackground,
-        ),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        decorationBox = { innerTextField ->
-            Box {
-                if (value.text.isEmpty()) {
-                    Text(
-                        text = "Yazmaya başla...",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    )
-                }
-                innerTextField()
+            ) {
+                append(text.substring(0, titleEnd))
             }
-        },
-    )
+            append(text.substring(titleEnd))
+        } else {
+            append(text)
+        }
+
+        // Ghost text appended inline after cursor
+        if (ghostText.isNotBlank()) {
+            withStyle(
+                SpanStyle(
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    fontStyle = FontStyle.Italic,
+                )
+            ) {
+                append(ghostText)
+            }
+        }
+
+        // Inline AI error message
+        if (aiError != null) {
+            withStyle(
+                SpanStyle(
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    fontStyle = FontStyle.Italic,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                )
+            ) {
+                append("  $aiError")
+            }
+        }
+    }
+
+    Column(modifier = modifier) {
+        BasicTextField(
+            value = TextFieldValue(
+                annotatedString = annotated,
+                selection = value.selection,
+                composition = value.composition,
+            ),
+            onValueChange = { new ->
+                // Strip ghost/error from stored value — only real text goes to ViewModel
+                onValueChange(
+                    TextFieldValue(
+                        text = new.text.take(text.length),
+                        selection = new.selection,
+                        composition = new.composition,
+                    )
+                )
+            },
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            decorationBox = { innerTextField ->
+                Box {
+                    if (value.text.isEmpty()) {
+                        Text(
+                            text = "Yazmaya başla...",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+
+        // Ghost text tap target (tap = accept, long-press = variants)
+        if (ghostText.isNotBlank()) {
+            Text(
+                text = "↵ Kabul et",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .combinedClickable(
+                        onClick = onAcceptGhost,
+                        onLongClick = onLongPressGhost,
+                    ),
+            )
+        }
+    }
 }
 
 // ── Formatting Toolbar ────────────────────────────────────────────────────────
