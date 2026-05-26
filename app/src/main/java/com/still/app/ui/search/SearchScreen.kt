@@ -165,6 +165,7 @@ private fun SearchResults(
             NoteListItem(
                 note = note,
                 onClick = { onNoteClick(note.id) },
+                onLongClick = {}, // no context menu in search — tap to open only
             )
         }
     }
