@@ -12,12 +12,11 @@ import java.net.URL
 import javax.inject.Inject
 
 private const val TAG = "GeminiRepo"
+private const val GEMINI_MODEL = "gemini-2.5-flash"
+private const val GEMINI_BASE_URL =
+    "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent"
 private const val CONNECT_TIMEOUT_MS = 5_000
 private const val READ_TIMEOUT_MS = 10_000
-private const val GEMINI_BASE =
-    "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent"
-
-private const val GEMINI_MODEL = "gemini-2.5-flash"
 
 class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
 
@@ -47,7 +46,10 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
     // ── HTTP ──────────────────────────────────────────────────────────────────
 
     private fun callGemini(prompt: String, candidateCount: Int): String {
-        val url = URL("$GEMINI_BASE?key=${BuildConfig.GEMINI_API_KEY}")
+        val url = URL("$GEMINI_BASE_URL?key=${BuildConfig.GEMINI_API_KEY}")
+        val body = buildRequestBody(prompt, candidateCount)
+
+        Log.d(TAG, "request body: $body")
 
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
