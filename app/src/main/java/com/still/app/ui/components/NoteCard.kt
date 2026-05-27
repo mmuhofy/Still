@@ -2,9 +2,10 @@ package com.still.app.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,6 +37,7 @@ fun NoteCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .aspectRatio(1f) // Square card
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -46,54 +48,52 @@ fun NoteCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-        ) {
-            // Title row — pin icon on right if pinned
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 Text(
                     text = note.title.ifBlank { "Başlıksız not" },
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
                 )
-                if (note.isPinned) {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "Sabitlenmiş",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(14.dp),
+
+                if (note.content.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = note.content,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = Constants.NOTE_CARD_PREVIEW_LINES,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
 
-            // Preview — up to 2 lines
-            if (note.content.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.weight(1f))
+
                 Text(
-                    text = note.content,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = Constants.NOTE_CARD_PREVIEW_LINES,
-                    overflow = TextOverflow.Ellipsis,
+                    text = formatNoteDate(note.updatedAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
-
-            // Date
-            Text(
-                text = formatNoteDate(note.updatedAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            )
+            // Pin icon top-right
+            if (note.isPinned) {
+                Icon(
+                    imageVector = Icons.Default.PushPin,
+                    contentDescription = "Sabitlenmiş",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .size(13.dp),
+                )
+            }
         }
     }
 }

@@ -37,13 +37,12 @@ fun SwipeToDeleteBox(
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            // Only end-to-start (left swipe) triggers delete
             value == SwipeToDismissBoxValue.EndToStart
         },
-        positionalThreshold = { totalDistance -> totalDistance * 0.35f },
+        // Full swipe required — threshold at 75%
+        positionalThreshold = { totalDistance -> totalDistance * 0.75f },
     )
 
-    // Fire delete callback once threshold is crossed
     LaunchedEffect(dismissState.currentValue) {
         if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
             onDeleted()

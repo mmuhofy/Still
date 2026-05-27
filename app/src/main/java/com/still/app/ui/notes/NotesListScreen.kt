@@ -11,10 +11,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.GridView
@@ -64,84 +68,73 @@ fun NotesListScreen(
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var contextMenuNote by remember { mutableStateOf<Long?>(null) }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Still",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(
-                            Icons.Outlined.Search,
-                            contentDescription = "Ara",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    // FAB lives outside Scaffold so it never shifts during keyboard/nav bar changes
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Still",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onBackground,
                         )
-                    }
-                    Box {
-                        IconButton(onClick = { sortMenuExpanded = true }) {
+                    },
+                    actions = {
+                        IconButton(onClick = onSearchClick) {
                             Icon(
-                                Icons.Outlined.Sort,
-                                contentDescription = "Sırala",
+                                Icons.Outlined.Search,
+                                contentDescription = "Ara",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        SortDropdownMenu(
-                            expanded = sortMenuExpanded,
-                            currentOrder = state.sortOrder,
-                            onOrderSelected = {
-                                viewModel.onEvent(NotesListEvent.SetSortOrder(it))
-                                sortMenuExpanded = false
-                            },
-                            onDismiss = { sortMenuExpanded = false },
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            val next = if (state.viewMode == NoteViewMode.CARD)
-                                NoteViewMode.LIST else NoteViewMode.CARD
-                            viewModel.onEvent(NotesListEvent.SetViewMode(next))
+                        Box {
+                            IconButton(onClick = { sortMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Outlined.Sort,
+                                    contentDescription = "Sırala",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            SortDropdownMenu(
+                                expanded = sortMenuExpanded,
+                                currentOrder = state.sortOrder,
+                                onOrderSelected = {
+                                    viewModel.onEvent(NotesListEvent.SetSortOrder(it))
+                                    sortMenuExpanded = false
+                                },
+                                onDismiss = { sortMenuExpanded = false },
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = if (state.viewMode == NoteViewMode.CARD)
-                                Icons.Outlined.ViewList else Icons.Outlined.GridView,
-                            contentDescription = "Görünümü değiştir",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNewNote,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.background,
-                elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                shape = MaterialTheme.shapes.small,
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Yeni not")
-            }
-        },
-    ) { innerPadding ->
+                        IconButton(
+                            onClick = {
+                                val next = if (state.viewMode == NoteViewMode.CARD)
+                                    NoteViewMode.LIST else NoteViewMode.CARD
+                                viewModel.onEvent(NotesListEvent.SetViewMode(next))
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (state.viewMode == NoteViewMode.CARD)
+                                    Icons.Outlined.ViewList else Icons.Outlined.GridView,
+                                contentDescription = "Görünümü değiştir",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                    scrollBehavior = scrollBehavior,
+                )
+            },
+        ) { innerPadding ->
+            if (state.isLoading) return@Scaffold
 
-        if (state.isLoading) return@Scaffold
+            val allEmpty = state.pinnedNotes.isEmpty() && state.unpinnedNotes.isEmpty()
 
-        val allEmpty = state.pinnedNotes.isEmpty() && state.unpinnedNotes.isEmpty()
-
-        Box(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = allEmpty,
                 enter = fadeIn(),
@@ -173,6 +166,21 @@ fun NotesListScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 72.dp),
             )
+        }
+
+        // FAB — fixed position, never affected by keyboard or nav bar layout changes
+        FloatingActionButton(
+            onClick = onNewNote,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.background,
+            elevation = FloatingActionButtonDefaults.elevation(0.dp),
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 88.dp),
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Yeni not")
         }
     }
 
@@ -206,70 +214,98 @@ private fun NotesList(
     onLongClick: (Long) -> Unit,
     viewModel: NotesListViewModel,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 8.dp,
-            bottom = innerPadding.calculateBottomPadding() + 88.dp,
-            start = 16.dp,
-            end = 16.dp,
-        ),
-        verticalArrangement = if (state.viewMode == NoteViewMode.CARD)
-            Arrangement.spacedBy(10.dp) else Arrangement.Top,
-    ) {
-        if (state.pinnedNotes.isNotEmpty()) {
-            item { SectionLabel(text = "Sabitlenmiş") }
-            items(state.pinnedNotes, key = { it.id }) { note ->
-                NoteItem(
-                    note = note,
-                    viewMode = state.viewMode,
-                    isLast = note == state.pinnedNotes.last(),
-                    onClick = { onNoteClick(note.id) },
-                    onLongClick = { onLongClick(note.id) },
-                    onDelete = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                )
+    val topPadding = innerPadding.calculateTopPadding() + 8.dp
+    val bottomPadding = innerPadding.calculateBottomPadding() + 88.dp
+
+    if (state.viewMode == NoteViewMode.CARD) {
+        // 2-column square grid
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                top = topPadding,
+                bottom = bottomPadding,
+                start = 12.dp,
+                end = 12.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (state.pinnedNotes.isNotEmpty()) {
+                item(span = { GridItemSpan(2) }) {
+                    SectionLabel(text = "Sabitlenmiş")
+                }
+                items(state.pinnedNotes, key = { it.id }) { note ->
+                    SwipeToDeleteBox(
+                        onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
+                    ) {
+                        NoteCard(
+                            note = note,
+                            onClick = { onNoteClick(note.id) },
+                            onLongClick = { onLongClick(note.id) },
+                        )
+                    }
+                }
+                if (state.unpinnedNotes.isNotEmpty()) {
+                    item(span = { GridItemSpan(2) }) {
+                        SectionLabel(text = "Notlar", topPadding = true)
+                    }
+                }
             }
-            if (state.unpinnedNotes.isNotEmpty()) {
-                item { Spacer(Modifier.height(8.dp)) }
-                item { SectionLabel(text = "Notlar") }
+            items(state.unpinnedNotes, key = { it.id }) { note ->
+                SwipeToDeleteBox(
+                    onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
+                ) {
+                    NoteCard(
+                        note = note,
+                        onClick = { onNoteClick(note.id) },
+                        onLongClick = { onLongClick(note.id) },
+                    )
+                }
             }
         }
-
-        items(state.unpinnedNotes, key = { it.id }) { note ->
-            NoteItem(
-                note = note,
-                viewMode = state.viewMode,
-                isLast = note == state.unpinnedNotes.last(),
-                onClick = { onNoteClick(note.id) },
-                onLongClick = { onLongClick(note.id) },
-                onDelete = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun NoteItem(
-    note: com.still.app.domain.model.Note,
-    viewMode: NoteViewMode,
-    isLast: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    SwipeToDeleteBox(onDeleted = onDelete) {
-        when (viewMode) {
-            NoteViewMode.CARD -> NoteCard(
-                note = note,
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
-            NoteViewMode.LIST -> NoteListItem(
-                note = note,
-                onClick = onClick,
-                onLongClick = onLongClick,
-                showDivider = !isLast,
-            )
+    } else {
+        // Single-column list
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                top = topPadding,
+                bottom = bottomPadding,
+                start = 16.dp,
+                end = 16.dp,
+            ),
+            verticalArrangement = Arrangement.Top,
+        ) {
+            if (state.pinnedNotes.isNotEmpty()) {
+                item { SectionLabel(text = "Sabitlenmiş") }
+                items(state.pinnedNotes, key = { it.id }) { note ->
+                    SwipeToDeleteBox(
+                        onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
+                    ) {
+                        NoteListItem(
+                            note = note,
+                            onClick = { onNoteClick(note.id) },
+                            onLongClick = { onLongClick(note.id) },
+                            showDivider = note != state.pinnedNotes.last(),
+                        )
+                    }
+                }
+                if (state.unpinnedNotes.isNotEmpty()) {
+                    item { SectionLabel(text = "Notlar", topPadding = true) }
+                }
+            }
+            items(state.unpinnedNotes, key = { it.id }) { note ->
+                SwipeToDeleteBox(
+                    onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
+                ) {
+                    NoteListItem(
+                        note = note,
+                        onClick = { onNoteClick(note.id) },
+                        onLongClick = { onLongClick(note.id) },
+                        showDivider = note != state.unpinnedNotes.last(),
+                    )
+                }
+            }
         }
     }
 }
@@ -277,12 +313,15 @@ private fun NoteItem(
 // ── Section Label ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun SectionLabel(text: String) {
+private fun SectionLabel(text: String, topPadding: Boolean = false) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        modifier = Modifier.padding(bottom = 6.dp, top = 4.dp),
+        modifier = Modifier.padding(
+            top = if (topPadding) 12.dp else 4.dp,
+            bottom = 6.dp,
+        ),
     )
 }
 
@@ -320,10 +359,7 @@ private fun SortDropdownMenu(
     onOrderSelected: (NoteSortOrder) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-    ) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         listOf(
             NoteSortOrder.LAST_MODIFIED to "Son düzenleme",
             NoteSortOrder.CREATED to "Oluşturma tarihi",
@@ -356,10 +392,7 @@ private fun NoteContextMenu(
     onDelete: () -> Unit,
 ) {
     Box {
-        DropdownMenu(
-            expanded = true,
-            onDismissRequest = onDismiss,
-        ) {
+        DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
             DropdownMenuItem(
                 text = {
                     Text(
