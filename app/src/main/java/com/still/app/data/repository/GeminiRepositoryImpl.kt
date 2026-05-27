@@ -12,44 +12,74 @@ import java.net.URL
 import javax.inject.Inject
 
 private const val TAG = "GeminiRepo"
-private const val GEMINI_MODEL = "gemini-2.5-flash"
-private const val GEMINI_BASE_URL =
-    "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_MODEL:generateContent"
 private const val CONNECT_TIMEOUT_MS = 5_000
 private const val READ_TIMEOUT_MS = 10_000
+private const val GEMINI_BASE =
+    "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+
+// Priority order — current working model is remembered across requests
+private val MODEL_CHAIN = listOf(
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3-flash",
+    "gemini-2.5-flash-lite",
+)
 
 class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
 
+    // Index of the currently active model — sticks until a 429 forces fallback
+    @Volatile private var currentModelIndex = 0
+
     override suspend fun getCompletion(context: String): Result<String?> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val raw = callGemini(buildSinglePrompt(context), candidateCount = 1)
-                val result = extractFirstCandidate(raw)
-                Log.d(TAG, "completion: $result")
-                result
-            }
+            runCatching { callWithFallback(buildSinglePrompt(context), candidateCount = 1) { extractFirstCandidate(it) } }
         }
 
-    override suspend fun getCompletionVariants(
-        context: String,
-        count: Int,
-    ): Result<List<String>> =
+    override suspend fun getCompletionVariants(context: String, count: Int): Result<List<String>> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                val raw = callGemini(buildVariantsPrompt(context), candidateCount = 1)
-                val results = extractAllCandidates(raw)
-                Log.d(TAG, "variants: $results")
-                results
+            runCatching { callWithFallback(buildVariantsPrompt(context), candidateCount = 1) { extractAllCandidates(it) } }
+        }
+
+    // ── Fallback logic ────────────────────────────────────────────────────────
+
+    private fun <T> callWithFallback(
+        prompt: String,
+        candidateCount: Int,
+        parse: (String) -> T,
+    ): T {
+        // Start from current working model, try each subsequent one on 429
+        val startIndex = currentModelIndex
+        for (offset in MODEL_CHAIN.indices) {
+            val idx = (startIndex + offset) % MODEL_CHAIN.size
+            val model = MODEL_CHAIN[idx]
+            try {
+                val raw = callGemini(model, prompt, candidateCount)
+                // Success — lock to this model
+                if (currentModelIndex != idx) {
+                    Log.i(TAG, "Switched to model: $model")
+                    currentModelIndex = idx
+                }
+                return parse(raw)
+            } catch (e: Exception) {
+                val is429 = e.message?.contains("429") == true
+                if (is429) {
+                    Log.w(TAG, "[$model] 429 rate limit — trying next model")
+                    // continue to next model
+                } else {
+                    // Non-429 error — don't fallback, surface it
+                    throw e
+                }
             }
         }
+        throw Exception("All models rate limited")
+    }
 
     // ── HTTP ──────────────────────────────────────────────────────────────────
 
-    private fun callGemini(prompt: String, candidateCount: Int): String {
-        val url = URL("$GEMINI_BASE_URL?key=${BuildConfig.GEMINI_API_KEY}")
+    private fun callGemini(model: String, prompt: String, candidateCount: Int): String {
+        val url = URL(GEMINI_BASE.format(model) + "?key=${BuildConfig.GEMINI_API_KEY}")
         val body = buildRequestBody(prompt, candidateCount)
-
-        Log.d(TAG, "request body: $body")
 
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -66,12 +96,12 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
             conn.inputStream.bufferedReader().readText()
         } else {
             val error = conn.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-            Log.e(TAG, "HTTP $responseCode: $error")
+            Log.e(TAG, "[$model] HTTP $responseCode: $error")
             throw Exception("HTTP $responseCode: $error")
         }
         conn.disconnect()
 
-        Log.d(TAG, "response: $responseBody")
+        Log.d(TAG, "[$model] response: $responseBody")
         return responseBody
     }
 
