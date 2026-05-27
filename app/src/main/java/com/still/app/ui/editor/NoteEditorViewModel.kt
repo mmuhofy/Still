@@ -99,6 +99,7 @@ class NoteEditorViewModel @Inject constructor(
 
     private var skipNextUndoPush = false
     private var aiJob: Job? = null
+    private var lastAiContext: String = "" // prevent re-requesting for same text
 
     private val undoStack = ArrayDeque<TextFieldValue>()
     private val redoStack = ArrayDeque<TextFieldValue>()
@@ -306,6 +307,7 @@ class NoteEditorViewModel @Inject constructor(
         val current = _uiState.value.content
         pushUndo(current)
         redoStack.clear()
+        lastAiContext = "" // reset so new text triggers fresh completion
         val newValue = handleBulletContinuation(current, value)
         _uiState.update {
             it.copy(
@@ -326,10 +328,13 @@ class NoteEditorViewModel @Inject constructor(
             return
         }
         if (text.isBlank()) return
+        // Don't re-request if text hasn't changed — prevents ghost→strip→reschedule loop
+        if (text == lastAiContext && _uiState.value.ghostText.isNotBlank()) return
 
         aiJob?.cancel()
         aiJob = viewModelScope.launch {
             delay(Constants.AI_TRIGGER_DEBOUNCE_MS)
+            lastAiContext = text
             _uiState.update { it.copy(isAiLoading = true, aiError = null) }
             getAiCompletion(text)
                 .onSuccess { suggestion ->

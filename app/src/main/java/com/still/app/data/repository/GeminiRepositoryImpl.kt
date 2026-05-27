@@ -90,6 +90,10 @@ class GeminiRepositoryImpl @Inject constructor() : GeminiRepository {
                 if (candidateCount > 1) put("candidateCount", candidateCount)
                 put("maxOutputTokens", 80)
                 put("temperature", 0.4)
+                // Disable thinking mode — drastically reduces latency for short completions
+                put("thinkingConfig", JSONObject().apply {
+                    put("thinkingBudget", 0)
+                })
             })
         }.toString()
     }
