@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Sort
@@ -28,8 +25,6 @@ import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +53,8 @@ import com.still.app.ui.components.SwipeToDeleteBox
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesListScreen(
+    topPadding: Dp,
+    bottomPadding: Dp,
     onNoteClick: (Long) -> Unit,
     onNewNote: () -> Unit,
     onSearchClick: () -> Unit,
@@ -68,10 +66,14 @@ fun NotesListScreen(
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var contextMenuNote by remember { mutableStateOf<Long?>(null) }
 
-    // FAB lives outside Scaffold so it never shifts during keyboard/nav bar changes
+    // FAB height (56dp) + spacing (20dp) + bottom nav
+    val fabSpacing = 56.dp + 20.dp + bottomPadding
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 TopAppBar(
@@ -135,53 +137,31 @@ fun NotesListScreen(
 
             val allEmpty = state.pinnedNotes.isEmpty() && state.unpinnedNotes.isEmpty()
 
-            AnimatedVisibility(
-                visible = allEmpty,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
+            AnimatedVisibility(visible = allEmpty, enter = fadeIn(), exit = fadeOut()) {
                 EmptyState(modifier = Modifier.padding(innerPadding))
             }
 
-            AnimatedVisibility(
-                visible = !allEmpty,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
+            AnimatedVisibility(visible = !allEmpty, enter = fadeIn(), exit = fadeOut()) {
                 NotesList(
                     state = state,
-                    innerPadding = innerPadding,
+                    topPadding = innerPadding.calculateTopPadding(),
+                    bottomPadding = fabSpacing,
                     onNoteClick = onNoteClick,
                     onLongClick = { contextMenuNote = it },
                     viewModel = viewModel,
                 )
             }
-
-            StillSnackbar(
-                visible = state.pendingDeleteNote != null,
-                message = "Not silindi",
-                onAction = { viewModel.onEvent(NotesListEvent.UndoDelete) },
-                onDismiss = { viewModel.onEvent(NotesListEvent.ConfirmDelete) },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 72.dp),
-            )
         }
 
-        // FAB — fixed position, never affected by keyboard or nav bar layout changes
-        FloatingActionButton(
-            onClick = onNewNote,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.background,
-            elevation = FloatingActionButtonDefaults.elevation(0.dp),
-            shape = MaterialTheme.shapes.small,
+        StillSnackbar(
+            visible = state.pendingDeleteNote != null,
+            message = "Not silindi",
+            onAction = { viewModel.onEvent(NotesListEvent.UndoDelete) },
+            onDismiss = { viewModel.onEvent(NotesListEvent.ConfirmDelete) },
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 20.dp, bottom = 88.dp),
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Yeni not")
-        }
+                .align(Alignment.BottomCenter)
+                .padding(bottom = fabSpacing + 8.dp),
+        )
     }
 
     if (contextMenuNote != null) {
@@ -209,21 +189,18 @@ fun NotesListScreen(
 @Composable
 private fun NotesList(
     state: NotesListUiState,
-    innerPadding: PaddingValues,
+    topPadding: Dp,
+    bottomPadding: Dp,
     onNoteClick: (Long) -> Unit,
     onLongClick: (Long) -> Unit,
     viewModel: NotesListViewModel,
 ) {
-    val topPadding = innerPadding.calculateTopPadding() + 8.dp
-    val bottomPadding = innerPadding.calculateBottomPadding() + 88.dp
-
     if (state.viewMode == NoteViewMode.CARD) {
-        // 2-column square grid
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = topPadding,
+                top = topPadding + 8.dp,
                 bottom = bottomPadding,
                 start = 12.dp,
                 end = 12.dp,
@@ -232,44 +209,27 @@ private fun NotesList(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (state.pinnedNotes.isNotEmpty()) {
-                item(span = { GridItemSpan(2) }) {
-                    SectionLabel(text = "Sabitlenmiş")
-                }
+                item(span = { GridItemSpan(2) }) { SectionLabel("Sabitlenmiş") }
                 items(state.pinnedNotes, key = { it.id }) { note ->
-                    SwipeToDeleteBox(
-                        onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                    ) {
-                        NoteCard(
-                            note = note,
-                            onClick = { onNoteClick(note.id) },
-                            onLongClick = { onLongClick(note.id) },
-                        )
+                    SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
+                        NoteCard(note = note, onClick = { onNoteClick(note.id) }, onLongClick = { onLongClick(note.id) })
                     }
                 }
                 if (state.unpinnedNotes.isNotEmpty()) {
-                    item(span = { GridItemSpan(2) }) {
-                        SectionLabel(text = "Notlar", topPadding = true)
-                    }
+                    item(span = { GridItemSpan(2) }) { SectionLabel("Notlar", topPadding = true) }
                 }
             }
             items(state.unpinnedNotes, key = { it.id }) { note ->
-                SwipeToDeleteBox(
-                    onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                ) {
-                    NoteCard(
-                        note = note,
-                        onClick = { onNoteClick(note.id) },
-                        onLongClick = { onLongClick(note.id) },
-                    )
+                SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
+                    NoteCard(note = note, onClick = { onNoteClick(note.id) }, onLongClick = { onLongClick(note.id) })
                 }
             }
         }
     } else {
-        // Single-column list
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = topPadding,
+                top = topPadding + 8.dp,
                 bottom = bottomPadding,
                 start = 16.dp,
                 end = 16.dp,
@@ -277,11 +237,9 @@ private fun NotesList(
             verticalArrangement = Arrangement.Top,
         ) {
             if (state.pinnedNotes.isNotEmpty()) {
-                item { SectionLabel(text = "Sabitlenmiş") }
+                item { SectionLabel("Sabitlenmiş") }
                 items(state.pinnedNotes, key = { it.id }) { note ->
-                    SwipeToDeleteBox(
-                        onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                    ) {
+                    SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
                         NoteListItem(
                             note = note,
                             onClick = { onNoteClick(note.id) },
@@ -291,13 +249,11 @@ private fun NotesList(
                     }
                 }
                 if (state.unpinnedNotes.isNotEmpty()) {
-                    item { SectionLabel(text = "Notlar", topPadding = true) }
+                    item { SectionLabel("Notlar", topPadding = true) }
                 }
             }
             items(state.unpinnedNotes, key = { it.id }) { note ->
-                SwipeToDeleteBox(
-                    onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                ) {
+                SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
                     NoteListItem(
                         note = note,
                         onClick = { onNoteClick(note.id) },
@@ -318,10 +274,7 @@ private fun SectionLabel(text: String, topPadding: Boolean = false) {
         text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        modifier = Modifier.padding(
-            top = if (topPadding) 12.dp else 4.dp,
-            bottom = 6.dp,
-        ),
+        modifier = Modifier.padding(top = if (topPadding) 12.dp else 4.dp, bottom = 6.dp),
     )
 }
 
@@ -329,10 +282,7 @@ private fun SectionLabel(text: String, topPadding: Boolean = false) {
 
 @Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "Henüz not yok",
@@ -371,8 +321,7 @@ private fun SortDropdownMenu(
                         text = label,
                         color = if (currentOrder == order)
                             MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurface,
+                        else MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 },
@@ -404,11 +353,7 @@ private fun NoteContextMenu(
             )
             DropdownMenuItem(
                 text = {
-                    Text(
-                        "Sil",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Text("Sil", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
                 },
                 onClick = onDelete,
             )
