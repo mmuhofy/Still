@@ -99,6 +99,7 @@ class NoteEditorViewModel @Inject constructor(
 
     private var skipNextUndoPush = false
     private var aiJob: Job? = null
+    private var lastAiRequestAt: Long = 0L // epoch ms of last fired request
 
     private val undoStack = ArrayDeque<TextFieldValue>()
     private val redoStack = ArrayDeque<TextFieldValue>()
@@ -325,11 +326,22 @@ class NoteEditorViewModel @Inject constructor(
             _uiState.update { it.copy(isAiLoading = false, ghostText = "") }
             return
         }
-        if (text.isBlank()) return
+        if (text.length < Constants.AI_MIN_TEXT_LENGTH) return
 
         aiJob?.cancel()
         aiJob = viewModelScope.launch {
+            // Debounce — wait for typing to stop
             delay(Constants.AI_TRIGGER_DEBOUNCE_MS)
+
+            // Rate limit — respect 5 RPM free tier
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastAiRequestAt
+            if (elapsed < Constants.AI_MIN_REQUEST_INTERVAL_MS) {
+                val remaining = Constants.AI_MIN_REQUEST_INTERVAL_MS - elapsed
+                delay(remaining)
+            }
+
+            lastAiRequestAt = System.currentTimeMillis()
             _uiState.update { it.copy(isAiLoading = true, aiError = null) }
             getAiCompletion(text)
                 .onSuccess { suggestion ->
@@ -345,11 +357,17 @@ class NoteEditorViewModel @Inject constructor(
                     val isNetwork = err is java.net.UnknownHostException ||
                             err is java.net.SocketTimeoutException ||
                             err is java.net.ConnectException
+                    val isRateLimit = err.message?.contains("429") == true
                     _uiState.update {
                         it.copy(
                             ghostText = "",
                             isAiLoading = false,
-                            aiError = if (isNetwork) "İnternet bağlantısı gerekli" else null,
+                            // 429 → silent fail, network → show message
+                            aiError = when {
+                                isRateLimit -> null
+                                isNetwork -> "İnternet bağlantısı gerekli"
+                                else -> null
+                            },
                         )
                     }
                 }
