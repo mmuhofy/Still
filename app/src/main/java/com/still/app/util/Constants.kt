@@ -12,7 +12,9 @@ object Constants {
     const val AUTOSAVE_DEBOUNCE_MS = 1500L
 
     // AI completion
-    const val AI_TRIGGER_DEBOUNCE_MS = 400L
+    const val AI_TRIGGER_DEBOUNCE_MS = 2000L        // wait 2s after typing stops
+    const val AI_MIN_REQUEST_INTERVAL_MS = 12_000L  // free tier: 5 RPM = 1 req per 12s
+    const val AI_MIN_TEXT_LENGTH = 15               // don't request for very short text
     const val AI_COMPLETION_VARIANTS = 3
 
     // Delete undo snackbar
