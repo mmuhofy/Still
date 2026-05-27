@@ -271,24 +271,24 @@ private fun NoteTextField(
         BasicTextField(
             value = displayValue,
             onValueChange = { new ->
-                // Strip ghost from incoming text — real text is at most realTextLength chars
-                // (ghost was appended visually, user typed on top of it)
                 val strippedText = if (new.text.length > realTextLength + ghostText.length) {
-                    // User typed after ghost — take real part + new char
                     new.text.take(realTextLength) + new.text.drop(realTextLength + ghostText.length)
                 } else {
                     new.text.take(realTextLength.coerceAtMost(new.text.length))
                 }
-                val strippedSelection = TextRange(
-                    new.selection.start.coerceAtMost(strippedText.length)
-                )
-                onValueChange(
-                    TextFieldValue(
-                        text = strippedText,
-                        selection = strippedSelection,
-                        composition = new.composition,
+                // Only fire event if real text actually changed — prevents ghost recomposition loop
+                if (strippedText != text) {
+                    val strippedSelection = TextRange(
+                        new.selection.start.coerceAtMost(strippedText.length)
                     )
-                )
+                    onValueChange(
+                        TextFieldValue(
+                            text = strippedText,
+                            selection = strippedSelection,
+                            composition = new.composition,
+                        )
+                    )
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
