@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
 import com.still.app.domain.model.Note
 import com.still.app.util.Constants
 import com.still.app.util.formatNoteDate
@@ -36,10 +36,7 @@ fun NoteListItem(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -66,8 +63,6 @@ fun NoteListItem(
                     )
                 }
             }
-
-            // Date + pin — right side
             Column(
                 horizontalAlignment = Alignment.End,
                 modifier = Modifier.padding(start = 12.dp),
@@ -80,7 +75,7 @@ fun NoteListItem(
                 if (note.isPinned) {
                     Spacer(Modifier.height(4.dp))
                     Icon(
-                        imageVector = Icons.Default.PushPin,
+                        imageVector = Lucide.Pin,
                         contentDescription = "Sabitlenmiş",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(12.dp),
@@ -88,12 +83,8 @@ fun NoteListItem(
                 }
             }
         }
-
         if (showDivider) {
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 0.5.dp,
-            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
         }
     }
 }

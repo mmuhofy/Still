@@ -68,7 +68,7 @@ appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "a
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 
 # Icons — Lucide (replaces material-icons-extended)
-lucide-icons = { group = "com.composables", name = "icons-lucide-android", version.ref = "lucideIcons" }
+lucide-icons = { group = "com.composables", name = "icons-lucide-cmp", version.ref = "lucideIcons" }
 
 # Coroutines
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
