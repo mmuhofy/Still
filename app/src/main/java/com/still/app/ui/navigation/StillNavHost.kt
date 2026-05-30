@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -33,6 +31,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
 import com.still.app.ui.components.StillBottomNav
 import com.still.app.ui.editor.NoteEditorScreen
 import com.still.app.ui.notes.NotesListScreen
@@ -96,7 +96,6 @@ fun StillNavHost(
         },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            // NavHost — no padding applied here, each screen manages its own insets
             NavHost(
                 navController = navController,
                 startDestination = startDestination,
@@ -150,7 +149,6 @@ fun StillNavHost(
                 }
             }
 
-            // FAB — lives here so it's never affected by screen transitions or nav bar changes
             AnimatedVisibility(
                 visible = showFab,
                 enter = fadeIn() + scaleIn(),
@@ -162,18 +160,8 @@ fun StillNavHost(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { navController.navigate(Routes.noteEditor()) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "Yeni Not",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    },
+                    icon = { Icon(imageVector = Lucide.Plus, contentDescription = null) },
+                    text = { Text(text = "Yeni Not", style = MaterialTheme.typography.labelLarge) },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     elevation = FloatingActionButtonDefaults.elevation(0.dp),

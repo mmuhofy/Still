@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Trash2
 import com.still.app.util.Constants
 
 private val DeleteRed = Color(0xFFCF3B4B)
@@ -39,7 +39,6 @@ fun SwipeToDeleteBox(
         confirmValueChange = { value ->
             value == SwipeToDismissBoxValue.EndToStart
         },
-        // Full swipe required — threshold at 75%
         positionalThreshold = { totalDistance -> totalDistance * 0.75f },
     )
 
@@ -69,12 +68,10 @@ fun SwipeToDeleteBox(
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Delete,
+                    imageVector = Lucide.Trash2,
                     contentDescription = "Sil",
                     tint = Color.White,
-                    modifier = Modifier
-                        .padding(end = 20.dp)
-                        .size(22.dp),
+                    modifier = Modifier.padding(end = 20.dp).size(22.dp),
                 )
             }
         },
