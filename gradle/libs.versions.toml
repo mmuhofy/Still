@@ -21,6 +21,9 @@ lifecycleRuntimeCompose = "2.9.0"
 datastorePreferences = "1.1.4"
 appcompat = "1.7.0"
 
+# Icons
+lucideIcons = "2.2.1"
+
 # Coroutines
 coroutines = "1.10.2"
 
@@ -39,7 +42,6 @@ compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 activity-compose = { group = "androidx.activity", name = "activity-compose" }
 
 # Lifecycle
@@ -59,11 +61,14 @@ room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
-# AppCompat (XML theme parent for Compose apps)
+# AppCompat
 appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 
 # DataStore
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+
+# Icons — Lucide (replaces material-icons-extended)
+lucide-icons = { group = "com.composables", name = "icons-lucide-android", version.ref = "lucideIcons" }
 
 # Coroutines
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

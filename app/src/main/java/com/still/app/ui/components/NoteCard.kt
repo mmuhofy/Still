@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -22,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
 import com.still.app.domain.model.Note
 import com.still.app.util.Constants
 import com.still.app.util.formatNoteDate
@@ -37,15 +37,10 @@ fun NoteCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(1f) // Square card
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
+            .aspectRatio(1f)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -61,7 +56,6 @@ fun NoteCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-
                 if (note.content.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -72,20 +66,16 @@ fun NoteCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-
                 Spacer(Modifier.weight(1f))
-
                 Text(
                     text = formatNoteDate(note.updatedAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 )
             }
-
-            // Pin icon top-right
             if (note.isPinned) {
                 Icon(
-                    imageVector = Icons.Default.PushPin,
+                    imageVector = Lucide.Pin,
                     contentDescription = "Sabitlenmiş",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier

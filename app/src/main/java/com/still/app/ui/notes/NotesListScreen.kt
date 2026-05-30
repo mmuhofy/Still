@@ -17,11 +17,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Sort
-import androidx.compose.material.icons.outlined.ViewList
+import com.still.app.ui.components.NoteCard
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,7 +41,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.still.app.ui.components.NoteCard
+import com.composables.icons.lucide.ArrowUpDown
+import com.composables.icons.lucide.LayoutGrid
+import com.composables.icons.lucide.List
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Search
 import com.still.app.ui.components.NoteListItem
 import com.still.app.ui.components.StillSnackbar
 import com.still.app.ui.components.SwipeToDeleteBox
@@ -86,19 +86,11 @@ fun NotesListScreen(
                     },
                     actions = {
                         IconButton(onClick = onSearchClick) {
-                            Icon(
-                                Icons.Outlined.Search,
-                                contentDescription = "Ara",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Icon(Lucide.Search, contentDescription = "Ara", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Box {
                             IconButton(onClick = { sortMenuExpanded = true }) {
-                                Icon(
-                                    Icons.Outlined.Sort,
-                                    contentDescription = "Sırala",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Icon(Lucide.ArrowUpDown, contentDescription = "Sırala", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             SortDropdownMenu(
                                 expanded = sortMenuExpanded,
@@ -110,16 +102,12 @@ fun NotesListScreen(
                                 onDismiss = { sortMenuExpanded = false },
                             )
                         }
-                        IconButton(
-                            onClick = {
-                                val next = if (state.viewMode == NoteViewMode.CARD)
-                                    NoteViewMode.LIST else NoteViewMode.CARD
-                                viewModel.onEvent(NotesListEvent.SetViewMode(next))
-                            }
-                        ) {
+                        IconButton(onClick = {
+                            val next = if (state.viewMode == NoteViewMode.CARD) NoteViewMode.LIST else NoteViewMode.CARD
+                            viewModel.onEvent(NotesListEvent.SetViewMode(next))
+                        }) {
                             Icon(
-                                imageVector = if (state.viewMode == NoteViewMode.CARD)
-                                    Icons.Outlined.ViewList else Icons.Outlined.GridView,
+                                imageVector = if (state.viewMode == NoteViewMode.CARD) Lucide.List else Lucide.LayoutGrid,
                                 contentDescription = "Görünümü değiştir",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

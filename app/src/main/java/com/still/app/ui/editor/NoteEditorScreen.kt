@@ -15,17 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Redo
-import androidx.compose.material.icons.automirrored.outlined.Undo
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.FormatBold
-import androidx.compose.material.icons.outlined.FormatItalic
-import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.FormatUnderlined
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -64,6 +53,17 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Bold
+import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Heading2
+import com.composables.icons.lucide.Italic
+import com.composables.icons.lucide.List
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.Redo2
+import com.composables.icons.lucide.Underline
+import com.composables.icons.lucide.Undo2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,14 +76,9 @@ fun NoteEditorScreen(
     val focusRequester = remember { FocusRequester() }
     val variantsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    LaunchedEffect(state.isDeleted) {
-        if (state.isDeleted) onBack()
-    }
-
+    LaunchedEffect(state.isDeleted) { if (state.isDeleted) onBack() }
     LaunchedEffect(state.isLoading) {
-        if (!state.isLoading && state.noteId == -1L) {
-            focusRequester.requestFocus()
-        }
+        if (!state.isLoading && state.noteId == -1L) focusRequester.requestFocus()
     }
 
     Scaffold(
@@ -92,64 +87,35 @@ fun NoteEditorScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Outlined.ArrowBack,
-                            contentDescription = "Geri",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Icon(Lucide.ArrowLeft, contentDescription = "Geri", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 title = {},
                 actions = {
                     if (state.isAiLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
                     }
                     IconButton(onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin) }) {
                         Icon(
-                            imageVector = Icons.Outlined.PushPin,
+                            imageVector = Lucide.Pin,
                             contentDescription = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
-                            tint = if (state.isPinned)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (state.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Box {
                         IconButton(onClick = { overflowExpanded = true }) {
-                            Icon(
-                                Icons.Outlined.MoreVert,
-                                contentDescription = "Daha fazla",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Icon(Lucide.EllipsisVertical, contentDescription = "Daha fazla", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        DropdownMenu(
-                            expanded = overflowExpanded,
-                            onDismissRequest = { overflowExpanded = false },
-                        ) {
+                        DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
                             DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Sil",
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                },
-                                onClick = {
-                                    overflowExpanded = false
-                                    viewModel.onEvent(NoteEditorEvent.DeleteNote)
-                                },
+                                text = { Text("Sil", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) },
+                                onClick = { overflowExpanded = false; viewModel.onEvent(NoteEditorEvent.DeleteNote) },
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
@@ -165,7 +131,6 @@ fun NoteEditorScreen(
         },
     ) { innerPadding ->
         if (state.isLoading) return@Scaffold
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -181,9 +146,7 @@ fun NoteEditorScreen(
                 onValueChange = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
                 onLongPressGhost = { viewModel.onEvent(NoteEditorEvent.RequestVariants) },
                 focusRequester = focusRequester,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
             )
         }
     }
@@ -195,22 +158,10 @@ fun NoteEditorScreen(
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Text(
-                    text = "Alternatifler",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
+                Text("Alternatifler", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                 state.variants.forEach { variant ->
-                    TextButton(
-                        onClick = { viewModel.onEvent(NoteEditorEvent.AcceptVariant(variant)) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = variant,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                    TextButton(onClick = { viewModel.onEvent(NoteEditorEvent.AcceptVariant(variant)) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(variant, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 Spacer(Modifier.padding(bottom = 16.dp))
@@ -236,13 +187,10 @@ private fun NoteTextField(
     val text = value.text
     val firstNewline = text.indexOf('\n')
     val titleEnd = if (firstNewline == -1) text.length else firstNewline
-
     val ghostColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     val titleFontSize = MaterialTheme.typography.headlineSmall.fontSize
 
-    // Build AnnotatedString: real text (title bold) + ghost text (muted italic)
     val annotated = buildAnnotatedString {
-        // Title line — bold + larger
         if (titleEnd > 0) {
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = titleFontSize)) {
                 append(text.substring(0, titleEnd))
@@ -251,8 +199,6 @@ private fun NoteTextField(
         } else {
             append(text)
         }
-
-        // Ghost inline after real text — only if cursor is at end
         if (ghostText.isNotBlank() && value.selection.start == text.length) {
             withStyle(SpanStyle(color = ghostColor, fontStyle = FontStyle.Italic)) {
                 append(ghostText)
@@ -260,12 +206,7 @@ private fun NoteTextField(
         }
     }
 
-    // We pass annotated string but strip ghost in onValueChange using realTextLength
-    val displayValue = TextFieldValue(
-        annotatedString = annotated,
-        selection = value.selection,
-        composition = value.composition,
-    )
+    val displayValue = TextFieldValue(annotatedString = annotated, selection = value.selection, composition = value.composition)
 
     Column(modifier = modifier) {
         BasicTextField(
@@ -276,66 +217,31 @@ private fun NoteTextField(
                 } else {
                     new.text.take(realTextLength.coerceAtMost(new.text.length))
                 }
-                // Only fire event if real text actually changed — prevents ghost recomposition loop
                 if (strippedText != text) {
-                    val strippedSelection = TextRange(
-                        new.selection.start.coerceAtMost(strippedText.length)
-                    )
-                    onValueChange(
-                        TextFieldValue(
-                            text = strippedText,
-                            selection = strippedSelection,
-                            composition = new.composition,
-                        )
-                    )
+                    onValueChange(TextFieldValue(text = strippedText, selection = TextRange(new.selection.start.coerceAtMost(strippedText.length)), composition = new.composition))
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                color = MaterialTheme.colorScheme.onBackground,
-            ),
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onBackground),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             decorationBox = { innerTextField ->
                 Box {
                     if (text.isEmpty()) {
-                        Text(
-                            text = "Yazmaya başla...",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        )
+                        Text("Yazmaya başla...", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                     }
                     innerTextField()
                 }
             },
         )
-
-        // Long-press hint on ghost (tap = Enter to accept, long-press = variants)
         if (ghostText.isNotBlank() && value.selection.start == text.length) {
             Text(
                 text = "↵ kabul",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier
-                    .padding(top = 2.dp)
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = onLongPressGhost,
-                    ),
+                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                modifier = Modifier.padding(top = 2.dp).combinedClickable(onClick = {}, onLongClick = onLongPressGhost),
             )
         }
-
         if (aiError != null) {
-            Text(
-                text = aiError,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                    fontStyle = FontStyle.Italic,
-                ),
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            Text(text = aiError, style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f), fontStyle = FontStyle.Italic), modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -344,40 +250,21 @@ private fun NoteTextField(
 
 @Composable
 private fun FormattingToolbar(
-    onBold: () -> Unit,
-    onItalic: () -> Unit,
-    onUnderline: () -> Unit,
-    onHeading: () -> Unit,
-    onBullet: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
+    onBold: () -> Unit, onItalic: () -> Unit, onUnderline: () -> Unit,
+    onHeading: () -> Unit, onBullet: () -> Unit, onUndo: () -> Unit, onRedo: () -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .imePadding(),
-    ) {
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth().imePadding()) {
         Column {
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 0.5.dp,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ToolbarButton(Icons.Outlined.FormatBold, "Kalın", onBold)
-                ToolbarButton(Icons.Outlined.FormatItalic, "İtalik", onItalic)
-                ToolbarButton(Icons.Outlined.FormatUnderlined, "Altı çizili", onUnderline)
-                ToolbarButton(Icons.Outlined.Title, "Başlık", onHeading)
-                ToolbarButton(Icons.Outlined.FormatListBulleted, "Liste", onBullet)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                ToolbarButton(Lucide.Bold, "Kalın", onBold)
+                ToolbarButton(Lucide.Italic, "İtalik", onItalic)
+                ToolbarButton(Lucide.Underline, "Altı çizili", onUnderline)
+                ToolbarButton(Lucide.Heading2, "Başlık", onHeading)
+                ToolbarButton(Lucide.List, "Liste", onBullet)
                 Spacer(Modifier.weight(1f))
-                ToolbarButton(Icons.AutoMirrored.Outlined.Undo, "Geri al", onUndo)
-                ToolbarButton(Icons.AutoMirrored.Outlined.Redo, "Yinele", onRedo)
+                ToolbarButton(Lucide.Undo2, "Geri al", onUndo)
+                ToolbarButton(Lucide.Redo2, "Yinele", onRedo)
                 Spacer(Modifier.width(4.dp))
             }
         }
@@ -387,11 +274,6 @@ private fun FormattingToolbar(
 @Composable
 private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
+        Icon(imageVector = icon, contentDescription = label, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }

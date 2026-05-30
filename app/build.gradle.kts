@@ -9,7 +9,6 @@ plugins {
     alias(libs.plugins.room)
 }
 
-// Read local.properties safely — populated by CI via GitHub Secret
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) load(f.inputStream())
@@ -28,7 +27,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Expose API key to code — never hardcoded, sourced from local.properties or CI secret
         buildConfigField(
             "String",
             "GEMINI_API_KEY",
@@ -80,8 +78,10 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-    implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
+
+    // Lucide icons — replaces material-icons-extended
+    implementation(libs.lucide.icons)
 
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)

@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.House
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Settings
 import com.still.app.util.Constants
 
 sealed class BottomNavTab(
@@ -37,12 +37,12 @@ sealed class BottomNavTab(
 ) {
     data object Notes : BottomNavTab(
         route = "notes_list",
-        icon = Icons.Outlined.Home,
+        icon = Lucide.House,
         label = "Notlar",
     )
     data object Settings : BottomNavTab(
         route = "settings",
-        icon = Icons.Outlined.Settings,
+        icon = Lucide.Settings,
         label = "Ayarlar",
     )
 
@@ -85,7 +85,6 @@ fun StillBottomNav(
                         animationSpec = tween(Constants.ANIMATION_DURATION_MS),
                         label = "tab_tint_${tab.label}",
                     )
-
                     NavigationBarItem(
                         selected = selected,
                         onClick = { onTabSelected(tab) },
@@ -97,7 +96,6 @@ fun StillBottomNav(
                                     tint = iconTint,
                                     modifier = Modifier.size(22.dp),
                                 )
-                                // Gold indicator dot under active tab
                                 Spacer(Modifier.height(4.dp))
                                 Box(
                                     modifier = Modifier.size(
@@ -115,7 +113,7 @@ fun StillBottomNav(
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent, // no M3 pill — we use our own dot
+                            indicatorColor = Color.Transparent,
                         ),
                     )
                 }

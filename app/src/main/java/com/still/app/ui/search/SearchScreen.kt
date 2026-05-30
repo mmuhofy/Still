@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,8 +37,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 import com.still.app.ui.components.NoteListItem
-import com.still.app.util.Constants
 
 @Composable
 fun SearchScreen(
@@ -52,168 +52,70 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
 
-    // Auto-focus keyboard on open
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-    ) {
-        // ── Search bar ────────────────────────────────────────────────────────
-        SearchBar(
-            query = query,
-            onQueryChange = { viewModel.onEvent(SearchEvent.QueryChanged(it)) },
-            onClear = { viewModel.onEvent(SearchEvent.ClearQuery) },
-            onBack = onBack,
-            focusRequester = focusRequester,
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        TextField(
+            value = query,
+            onValueChange = { viewModel.onEvent(SearchEvent.QueryChanged(it)) },
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            placeholder = { Text("Notlarda ara…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            leadingIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Lucide.ArrowLeft, contentDescription = "Geri", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.onEvent(SearchEvent.ClearQuery) }) {
+                        Icon(Lucide.X, contentDescription = "Temizle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            textStyle = MaterialTheme.typography.bodyLarge,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
         )
 
-        // ── Subtle divider ────────────────────────────────────────────────────
-        androidx.compose.material3.HorizontalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-            thickness = 0.5.dp,
-        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), thickness = 0.5.dp)
 
-        // ── Body ──────────────────────────────────────────────────────────────
-        AnimatedContent(
-            targetState = uiState,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "SearchContent",
-        ) { state ->
+        AnimatedContent(targetState = uiState, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "SearchContent") { state ->
             when (state) {
                 SearchUiState.Idle -> SearchHint()
-                SearchUiState.Loading -> Unit // debounce is short, no spinner needed
+                SearchUiState.Loading -> Unit
                 SearchUiState.Empty -> SearchEmpty(query)
-                is SearchUiState.Results -> SearchResults(
-                    notes = state.notes,
-                    onNoteClick = onNoteClick,
-                )
-            }
-        }
-    }
-}
-
-// ── Search bar ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClear: () -> Unit,
-    onBack: () -> Unit,
-    focusRequester: FocusRequester,
-) {
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester),
-        placeholder = {
-            Text(
-                text = "Notlarda ara…",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        leadingIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Geri",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = onClear) {
-                    Icon(
-                        imageVector = Icons.Filled.Clear,
-                        contentDescription = "Temizle",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                is SearchUiState.Results -> LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                    items(state.notes, key = { it.id }) { note ->
+                        NoteListItem(note = note, onClick = { onNoteClick(note.id) }, onLongClick = {})
+                    }
                 }
             }
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        textStyle = MaterialTheme.typography.bodyLarge,
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-            cursorColor = MaterialTheme.colorScheme.primary,
-        ),
-    )
-}
-
-// ── Results list ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun SearchResults(
-    notes: List<com.still.app.domain.model.Note>,
-    onNoteClick: (Long) -> Unit,
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(vertical = 8.dp),
-    ) {
-        items(notes, key = { it.id }) { note ->
-            NoteListItem(
-                note = note,
-                onClick = { onNoteClick(note.id) },
-                onLongClick = {}, // no context menu in search — tap to open only
-            )
         }
     }
 }
-
-// ── Empty state ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun SearchEmpty(query: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = "Sonuç bulunamadı",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Sonuç bulunamadı", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "\"$query\" için eşleşen not yok",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text("\"$query\" için eşleşen not yok", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-// ── Idle hint ─────────────────────────────────────────────────────────────────
-
 @Composable
 private fun SearchHint() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Yazmaya başla…",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        )
+    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+        Text("Yazmaya başla…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
     }
 }
