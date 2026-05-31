@@ -37,11 +37,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
@@ -49,11 +54,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Bold
+import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Heading2
 import com.composables.icons.lucide.Italic
 import com.composables.icons.lucide.List
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Redo2
 import com.composables.icons.lucide.Underline
@@ -69,18 +74,13 @@ fun NoteEditorScreen(
     var overflowExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
-    // Pop back when note is deleted
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
     }
 
-    // FIX: LaunchedEffect(Unit) — fires exactly once after composition.
-    // Previously keyed on state.isLoading which re-triggered on recompositions,
-    // resetting cursor position on existing notes.
+    // Fires exactly once — auto-focus only for new notes
     LaunchedEffect(Unit) {
-        if (state.noteId == -1L) {
-            focusRequester.requestFocus()
-        }
+        if (state.noteId == -1L) focusRequester.requestFocus()
     }
 
     Scaffold(
@@ -155,13 +155,11 @@ fun NoteEditorScreen(
     ) { innerPadding ->
         if (state.isLoading) return@Scaffold
 
-        val scrollState = rememberScrollState()
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(scrollState)
+                .verticalScroll(rememberScrollState())
                 .imePadding(),
         ) {
             NoteTextField(
@@ -185,10 +183,6 @@ private fun NoteTextField(
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    // FIX: Title styling applied via VisualTransformation, not by mutating the
-    // TextFieldValue. This preserves cursor/selection exactly as the user left
-    // it — the transformation is purely visual and never touches the underlying
-    // text or offset mapping.
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -197,7 +191,10 @@ private fun NoteTextField(
             color = MaterialTheme.colorScheme.onBackground,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        visualTransformation = remember { TitleLineVisualTransformation() },
+        // MarkdownVisualTransformation styles the raw text in-place:
+        // markers (**) remain visible but the spanned region is also styled.
+        // Identity offset mapping is valid because no characters are hidden.
+        visualTransformation = remember { MarkdownVisualTransformation() },
         decorationBox = { innerTextField ->
             Box {
                 if (value.text.isEmpty()) {
@@ -213,39 +210,93 @@ private fun NoteTextField(
     )
 }
 
-// ── Visual Transformation — title line styled as headline ─────────────────────
+// ── Markdown Visual Transformation ────────────────────────────────────────────
 //
-// Applies SemiBold + 24sp to the first line only via VisualTransformation so
-// the underlying TextFieldValue and its selection are never touched.
-// Identity offset mapping means cursor positions are unchanged.
-// UNTESTED — verify before use
+// Applies visual styling to raw markdown text WITHOUT removing any characters.
+// Because the displayed string has the same length as the raw string,
+// OffsetMapping.Identity is correct — cursor positions are never affected.
+//
+// Supported:
+//   First line          → SemiBold 24sp  (title)
+//   **text**            → Bold
+//   __text__            → Underline      (matched before _italic_)
+//   _text_              → Italic
+//   ## text  (line)     → Bold 20sp
+//   - item   (line)     → no extra style (bullet char inserted by ViewModel)
 
-private class TitleLineVisualTransformation : VisualTransformation {
-    override fun filter(
-        text: androidx.compose.ui.text.AnnotatedString,
-    ): androidx.compose.ui.text.input.TransformedText {
+private class MarkdownVisualTransformation : VisualTransformation {
+
+    // Same patterns as MarkdownRenderer — order matters: __ before _
+    private val underlineRegex = Regex("""__(.*?)__""")
+    private val boldRegex      = Regex("""\*\*(.*?)\*\*""")
+    private val italicRegex    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
+    private val headingRegex   = Regex("""^#{1,3} .+""", RegexOption.MULTILINE)
+
+    override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
-        val titleEnd = raw.indexOf('\n').let { if (it == -1) raw.length else it }
+        val firstNewline = raw.indexOf('\n')
+        val titleEnd = if (firstNewline == -1) raw.length else firstNewline
 
         val annotated = buildAnnotatedString {
             append(raw)
+
+            // ── Title line — first line always gets headline weight ────────────
             if (titleEnd > 0) {
                 addStyle(
-                    style = SpanStyle(
+                    SpanStyle(
                         fontWeight = FontWeight.SemiBold,
-                        // headlineSmall is 24sp in Material 3 baseline type scale
                         fontSize = TextUnit(24f, TextUnitType.Sp),
                     ),
                     start = 0,
                     end = titleEnd,
                 )
             }
+
+            // ── Body markdown — only process text after the title line ─────────
+            val bodyStart = if (firstNewline == -1) raw.length else firstNewline + 1
+            if (bodyStart >= raw.length) return@buildAnnotatedString
+
+            // Underline — must run before italic so __ is consumed first
+            underlineRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(
+                    SpanStyle(textDecoration = TextDecoration.Underline),
+                    start = m.range.first,
+                    end = m.range.last + 1,
+                )
+            }
+
+            // Bold
+            boldRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(
+                    SpanStyle(fontWeight = FontWeight.Bold),
+                    start = m.range.first,
+                    end = m.range.last + 1,
+                )
+            }
+
+            // Italic
+            italicRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(
+                    SpanStyle(fontStyle = FontStyle.Italic),
+                    start = m.range.first,
+                    end = m.range.last + 1,
+                )
+            }
+
+            // Headings — full line styled as bold + larger text
+            headingRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = TextUnit(20f, TextUnitType.Sp),
+                    ),
+                    start = m.range.first,
+                    end = m.range.last + 1,
+                )
+            }
         }
 
-        return androidx.compose.ui.text.input.TransformedText(
-            text = annotated,
-            offsetMapping = androidx.compose.ui.text.input.OffsetMapping.Identity,
-        )
+        return TransformedText(annotated, OffsetMapping.Identity)
     }
 }
 
@@ -279,11 +330,11 @@ private fun FormattingToolbar(
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ToolbarButton(icon = Lucide.Bold,     label = "Kalın",       onClick = onBold)
-                ToolbarButton(icon = Lucide.Italic,   label = "İtalik",      onClick = onItalic)
+                ToolbarButton(icon = Lucide.Bold,      label = "Kalın",       onClick = onBold)
+                ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
                 ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
-                ToolbarButton(icon = Lucide.Heading2, label = "Başlık",      onClick = onHeading)
-                ToolbarButton(icon = Lucide.List,     label = "Liste",       onClick = onBullet)
+                ToolbarButton(icon = Lucide.Heading2,  label = "Başlık",      onClick = onHeading)
+                ToolbarButton(icon = Lucide.List,      label = "Liste",       onClick = onBullet)
 
                 Spacer(Modifier.weight(1f))
 
