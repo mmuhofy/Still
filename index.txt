@@ -2,6 +2,7 @@ https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/MainActivity.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/util/Constants.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/util/DataFormatter.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/util/MarkdownRenderer.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/navigation/StillNavHost.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/notes/NotesListScreen.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/notes/NotesListViewModel.kt
@@ -18,13 +19,19 @@ https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/components/StillBottomNav.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/editor/NoteEditorViewModel.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/editor/NoteEditorScreen.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/search/SearchViewModel.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/search/SearchScreen.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/settings/SettingsViewModel.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/ui/settings/SettingsScreen.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/data/local/entity/NoteEntity.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/data/local/entity/NoteMapper.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/data/local/dao/NoteDao.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/data/local/db/StillDatabase.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/data/repository/NoteRepositoryImpl.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/data/repository/GeminiRepositoryImpl.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/model/Note.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/repository/NoteRepository.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/repository/GeminiRepository.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/GetAllNotesUseCase.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/GetNoteByIdUseCase.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/CreateNoteUseCase.kt
@@ -32,9 +39,11 @@ https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/DeleteNoteUseCase.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/PinNoteUseCase.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/SearchNotesUseCase.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/domain/usecase/GetAICompletionUseCase.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/di/DatabaseModule.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/di/RepositoryModule.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/di/DataStoreModule.kt
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/java/com/still/app/di/GeminiModule.kt
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/drawable/ic_launcher_background.xml
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
@@ -60,6 +69,5 @@ https://raw.githubusercontent.com/mmuhofy/Still/main/docs/TODO.md
 https://raw.githubusercontent.com/mmuhofy/Still/main/tools/IconManager.sh
 https://raw.githubusercontent.com/mmuhofy/Still/main/tools/icon.png
 https://raw.githubusercontent.com/mmuhofy/Still/main/tools/InAppIconsPreview.html
+https://raw.githubusercontent.com/mmuhofy/Still/main/tools/gemini_model_tester.py
 https://raw.githubusercontent.com/mmuhofy/Still/main/index.txt
-https://raw.githubusercontent.com/mmuhofy/Still/main/index.html
-https://raw.githubusercontent.com/mmuhofy/Still/main/claude_context.txt

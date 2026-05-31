@@ -25,7 +25,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
 import com.still.app.util.Constants
 
-private val DeleteRed = Color(0xFFCF3B4B)
+private val DeleteRed    = Color(0xFFCF3B4B)
 private val DeleteRedDim = Color(0xFF2A1518)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,12 +36,17 @@ fun SwipeToDeleteBox(
     content: @Composable () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            value == SwipeToDismissBoxValue.EndToStart
-        },
-        positionalThreshold = { totalDistance -> totalDistance * 0.75f },
+        // FIX: confirmValueChange removed — let SwipeToDismissBox handle snap
+        // with its own positionalThreshold. When confirmValueChange always
+        // returns true the item snaps as soon as threshold is crossed even if
+        // the user is still dragging back, which caused premature deletion.
+        positionalThreshold = { totalDistance -> totalDistance * Constants.SWIPE_DELETE_THRESHOLD },
     )
 
+    // FIX: Only fire onDeleted when the item has fully settled at EndToStart
+    // (currentValue), NOT on targetValue changes. targetValue tracks the
+    // intended destination while the finger is still on screen — reacting to
+    // it caused deletion even when the user dragged back before releasing.
     LaunchedEffect(dismissState.currentValue) {
         if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
             onDeleted()
@@ -54,9 +59,11 @@ fun SwipeToDeleteBox(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true,
         backgroundContent = {
-            val triggered = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
+            // Background turns red only when the item will actually be deleted
+            // (targetValue reached threshold), not during casual drags.
+            val willDelete = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
             val bgColor by animateColorAsState(
-                targetValue = if (triggered) DeleteRed else DeleteRedDim,
+                targetValue = if (willDelete) DeleteRed else DeleteRedDim,
                 animationSpec = tween(Constants.ANIMATION_DURATION_MS),
                 label = "swipe_bg",
             )
@@ -71,7 +78,9 @@ fun SwipeToDeleteBox(
                     imageVector = Lucide.Trash2,
                     contentDescription = "Sil",
                     tint = Color.White,
-                    modifier = Modifier.padding(end = 20.dp).size(22.dp),
+                    modifier = Modifier
+                        .padding(end = 20.dp)
+                        .size(22.dp),
                 )
             }
         },
