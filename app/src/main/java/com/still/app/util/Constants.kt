@@ -14,6 +14,8 @@ object Constants {
     // AI completion
     const val AI_TRIGGER_DEBOUNCE_MS = 400L
     const val AI_COMPLETION_VARIANTS = 3
+    const val AI_MIN_TEXT_LENGTH = 15              // minimum chars before AI triggers
+    const val AI_MIN_REQUEST_INTERVAL_MS = 12_000L // minimum ms between AI requests
 
     // Delete undo snackbar
     const val SNACKBAR_UNDO_DURATION_MS = 3000L

@@ -13,17 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Redo
-import androidx.compose.material.icons.automirrored.outlined.Undo
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.FormatBold
-import androidx.compose.material.icons.outlined.FormatItalic
-import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.FormatUnderlined
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material.icons.outlined.Title
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,9 +42,22 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Bold
+import com.composables.icons.lucide.Heading2
+import com.composables.icons.lucide.Italic
+import com.composables.icons.lucide.List
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.Redo2
+import com.composables.icons.lucide.Underline
+import com.composables.icons.lucide.Undo2
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,9 +74,9 @@ fun NoteEditorScreen(
         if (state.isDeleted) onBack()
     }
 
-    // FIX: Auto-focus only fires once (Unit key) after loading completes.
-    // Previously keyed on state.isLoading which re-triggered on every recomposition
-    // that changed isLoading, potentially resetting cursor position.
+    // FIX: LaunchedEffect(Unit) — fires exactly once after composition.
+    // Previously keyed on state.isLoading which re-triggered on recompositions,
+    // resetting cursor position on existing notes.
     LaunchedEffect(Unit) {
         if (state.noteId == -1L) {
             focusRequester.requestFocus()
@@ -88,7 +90,7 @@ fun NoteEditorScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.Outlined.ArrowBack,
+                            imageVector = Lucide.ArrowLeft,
                             contentDescription = "Geri",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -98,7 +100,7 @@ fun NoteEditorScreen(
                 actions = {
                     IconButton(onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin) }) {
                         Icon(
-                            imageVector = Icons.Outlined.PushPin,
+                            imageVector = Lucide.Pin,
                             contentDescription = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
                             tint = if (state.isPinned)
                                 MaterialTheme.colorScheme.primary
@@ -109,7 +111,7 @@ fun NoteEditorScreen(
                     Box {
                         IconButton(onClick = { overflowExpanded = true }) {
                             Icon(
-                                Icons.Outlined.MoreVert,
+                                imageVector = Lucide.EllipsisVertical,
                                 contentDescription = "Daha fazla",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -183,16 +185,10 @@ private fun NoteTextField(
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    // FIX: The annotated string is built inside the decorationBox visualisation
-    // path only, NOT passed as the value to BasicTextField. Passing an
-    // AnnotatedString-based TextFieldValue while also setting selection causes
-    // Compose to re-evaluate composition state on every keystroke and can reset
-    // the cursor to the end of the text.
-    //
-    // Instead: BasicTextField owns the raw TextFieldValue (preserving selection
-    // exactly as the user left it), and we apply the title style via a custom
-    // VisualTransformation so the first line renders with headline weight
-    // without touching the underlying selection at all.
+    // FIX: Title styling applied via VisualTransformation, not by mutating the
+    // TextFieldValue. This preserves cursor/selection exactly as the user left
+    // it — the transformation is purely visual and never touches the underlying
+    // text or offset mapping.
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -201,10 +197,7 @@ private fun NoteTextField(
             color = MaterialTheme.colorScheme.onBackground,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        // UNTESTED — verify before use
-        visualTransformation = remember {
-            TitleLineVisualTransformation()
-        },
+        visualTransformation = remember { TitleLineVisualTransformation() },
         decorationBox = { innerTextField ->
             Box {
                 if (value.text.isEmpty()) {
@@ -222,16 +215,17 @@ private fun NoteTextField(
 
 // ── Visual Transformation — title line styled as headline ─────────────────────
 //
-// Applies SemiBold + headlineSmall fontSize to the first line only.
-// Uses VisualTransformation so the underlying TextFieldValue (and its
-// selection/cursor) is never touched — the cursor stays exactly where the
-// user placed it.
+// Applies SemiBold + 24sp to the first line only via VisualTransformation so
+// the underlying TextFieldValue and its selection are never touched.
+// Identity offset mapping means cursor positions are unchanged.
+// UNTESTED — verify before use
 
 private class TitleLineVisualTransformation : VisualTransformation {
-    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+    override fun filter(
+        text: androidx.compose.ui.text.AnnotatedString,
+    ): androidx.compose.ui.text.input.TransformedText {
         val raw = text.text
-        val firstNewline = raw.indexOf('\n')
-        val titleEnd = if (firstNewline == -1) raw.length else firstNewline
+        val titleEnd = raw.indexOf('\n').let { if (it == -1) raw.length else it }
 
         val annotated = buildAnnotatedString {
             append(raw)
@@ -239,13 +233,8 @@ private class TitleLineVisualTransformation : VisualTransformation {
                 addStyle(
                     style = SpanStyle(
                         fontWeight = FontWeight.SemiBold,
-                        // Hardcoded sp value — avoids capturing a Composable-scoped
-                        // MaterialTheme reference inside a non-Composable class.
-                        // headlineSmall is typically 24sp; adjust if your theme differs.
-                        fontSize = androidx.compose.ui.unit.TextUnit(
-                            24f,
-                            androidx.compose.ui.unit.TextUnitType.Sp,
-                        ),
+                        // headlineSmall is 24sp in Material 3 baseline type scale
+                        fontSize = TextUnit(24f, TextUnitType.Sp),
                     ),
                     start = 0,
                     end = titleEnd,
@@ -253,7 +242,6 @@ private class TitleLineVisualTransformation : VisualTransformation {
             }
         }
 
-        // 1-to-1 offset mapping — no character substitution, just styling
         return androidx.compose.ui.text.input.TransformedText(
             text = annotated,
             offsetMapping = androidx.compose.ui.text.input.OffsetMapping.Identity,
@@ -291,16 +279,16 @@ private fun FormattingToolbar(
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ToolbarButton(icon = Icons.Outlined.FormatBold,         label = "Kalın",        onClick = onBold)
-                ToolbarButton(icon = Icons.Outlined.FormatItalic,       label = "İtalik",       onClick = onItalic)
-                ToolbarButton(icon = Icons.Outlined.FormatUnderlined,   label = "Altı çizili",  onClick = onUnderline)
-                ToolbarButton(icon = Icons.Outlined.Title,              label = "Başlık",       onClick = onHeading)
-                ToolbarButton(icon = Icons.Outlined.FormatListBulleted, label = "Liste",        onClick = onBullet)
+                ToolbarButton(icon = Lucide.Bold,     label = "Kalın",       onClick = onBold)
+                ToolbarButton(icon = Lucide.Italic,   label = "İtalik",      onClick = onItalic)
+                ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
+                ToolbarButton(icon = Lucide.Heading2, label = "Başlık",      onClick = onHeading)
+                ToolbarButton(icon = Lucide.List,     label = "Liste",       onClick = onBullet)
 
                 Spacer(Modifier.weight(1f))
 
-                ToolbarButton(icon = Icons.AutoMirrored.Outlined.Undo, label = "Geri al", onClick = onUndo)
-                ToolbarButton(icon = Icons.AutoMirrored.Outlined.Redo, label = "Yinele",  onClick = onRedo)
+                ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
+                ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
                 Spacer(Modifier.width(4.dp))
             }
         }
