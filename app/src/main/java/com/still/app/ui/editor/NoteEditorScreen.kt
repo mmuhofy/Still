@@ -1,5 +1,6 @@
 package com.still.app.ui.editor
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
@@ -146,7 +148,7 @@ fun NoteEditorScreen(
                 onBold      = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
                 onItalic    = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
                 onUnderline = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
-                onHeading   = { viewModel.onEvent(NoteEditorEvent.ApplyHeading) },
+                onHeading   = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
                 onBullet    = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
                 onUndo      = { viewModel.onEvent(NoteEditorEvent.Undo) },
                 onRedo      = { viewModel.onEvent(NoteEditorEvent.Redo) },
@@ -191,9 +193,10 @@ private fun NoteTextField(
             color = MaterialTheme.colorScheme.onBackground,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        // MarkdownVisualTransformation styles the raw text in-place:
-        // markers (**) remain visible but the spanned region is also styled.
-        // Identity offset mapping is valid because no characters are hidden.
+        // MarkdownVisualTransformation:
+        //   - Hides markers (**bold** → bold, ## H → H)
+        //   - Applies corresponding SpanStyles on visible content
+        //   - Custom OffsetMapping keeps cursor in the correct raw position
         visualTransformation = remember { MarkdownVisualTransformation() },
         decorationBox = { innerTextField ->
             Box {
@@ -212,116 +215,173 @@ private fun NoteTextField(
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
 //
-// Applies visual styling to raw markdown text WITHOUT removing any characters.
-// Because the displayed string has the same length as the raw string,
-// OffsetMapping.Identity is correct — cursor positions are never affected.
+// Hides markdown marker characters and applies styles to the visible content.
+// Since display text length ≠ raw text length, a custom OffsetMapping is built
+// from two parallel arrays so that cursor and selection always point to the
+// correct position in the underlying raw TextFieldValue.
 //
-// Supported:
-//   First line          → SemiBold 24sp  (title)
-//   **text**            → Bold
-//   __text__            → Underline      (matched before _italic_)
-//   _text_              → Italic
-//   ## text  (line)     → Bold 20sp
-//   - item   (line)     → no extra style (bullet char inserted by ViewModel)
+// Supported syntax:
+//   First line       → SemiBold 24sp  (title — always)
+//   **text**         → Bold           (markers hidden)
+//   __text__         → Underline      (markers hidden — processed before _)
+//   _text_           → Italic         (markers hidden)
+//   # / ## / ### H   → Heading style  (prefix hidden)
 
 private class MarkdownVisualTransformation : VisualTransformation {
 
-    // Same patterns as MarkdownRenderer — order matters: __ before _
-    private val underlineRegex = Regex("""__(.*?)__""")
-    private val boldRegex      = Regex("""\*\*(.*?)\*\*""")
-    private val italicRegex    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
-    private val headingRegex   = Regex("""^#{1,3} .+""", RegexOption.MULTILINE)
+    // Heading: match only the prefix (# + space) — no need to match the full line
+    private val headingPrefixRegex = Regex("""^(#{1,3}) """, RegexOption.MULTILINE)
+    private val boldRegex          = Regex("""\*\*(.*?)\*\*""")
+    private val italicRegex        = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
+    private val underlineRegex     = Regex("""__(.*?)__""")
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
+        if (raw.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+
         val firstNewline = raw.indexOf('\n')
-        val titleEnd = if (firstNewline == -1) raw.length else firstNewline
+        val titleEnd     = if (firstNewline == -1) raw.length else firstNewline
+        val bodyStart    = if (firstNewline == -1) raw.length else firstNewline + 1
 
-        val annotated = buildAnnotatedString {
-            append(raw)
+        // raw content ranges with their styles (inclusive IntRange)
+        val styleRanges   = mutableListOf<Pair<IntRange, SpanStyle>>()
+        // raw ranges of characters to hide
+        val hiddenRanges  = mutableListOf<IntRange>()
+        // full raw ranges already owned by an inline span (overlap guard)
+        val claimedRanges = mutableListOf<IntRange>()
 
-            // ── Title line — first line always gets headline weight ────────────
-            if (titleEnd > 0) {
-                addStyle(
-                    SpanStyle(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = TextUnit(24f, TextUnitType.Sp),
-                    ),
-                    start = 0,
-                    end = titleEnd,
-                )
-            }
+        // Try to register an inline span (bold / italic / underline).
+        // markerLen = number of marker chars on each side (**=2, _=1, __=2).
+        fun tryInline(matchRange: IntRange, markerLen: Int, style: SpanStyle) {
+            val cs = matchRange.first + markerLen
+            val ce = matchRange.last  - markerLen
+            if (cs > ce) return // empty content
+            if (claimedRanges.any { it.first <= matchRange.last && it.last >= matchRange.first }) return
+            claimedRanges += matchRange
+            hiddenRanges  += matchRange.first until cs       // opening marker
+            hiddenRanges  += (ce + 1)..matchRange.last       // closing marker
+            styleRanges   += (cs..ce) to style
+        }
 
-            // ── Body markdown — only process text after the title line ─────────
-            val bodyStart = if (firstNewline == -1) raw.length else firstNewline + 1
-            if (bodyStart >= raw.length) return@buildAnnotatedString
-
-            // Underline — must run before italic so __ is consumed first
+        if (bodyStart < raw.length) {
+            // Underline __ BEFORE italic _ (same order as MarkdownRenderer)
             underlineRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(
-                    SpanStyle(textDecoration = TextDecoration.Underline),
-                    start = m.range.first,
-                    end = m.range.last + 1,
-                )
+                tryInline(m.range, 2, SpanStyle(textDecoration = TextDecoration.Underline))
             }
-
-            // Bold
             boldRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(
-                    SpanStyle(fontWeight = FontWeight.Bold),
-                    start = m.range.first,
-                    end = m.range.last + 1,
-                )
+                tryInline(m.range, 2, SpanStyle(fontWeight = FontWeight.Bold))
             }
-
-            // Italic
             italicRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(
-                    SpanStyle(fontStyle = FontStyle.Italic),
-                    start = m.range.first,
-                    end = m.range.last + 1,
-                )
+                tryInline(m.range, 1, SpanStyle(fontStyle = FontStyle.Italic))
             }
 
-            // Headings — full line styled as bold + larger text
-            headingRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(
-                    SpanStyle(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = TextUnit(20f, TextUnitType.Sp),
-                    ),
-                    start = m.range.first,
-                    end = m.range.last + 1,
-                )
+            // Headings — processed independently (line-level, coexists with inline spans)
+            headingPrefixRegex.findAll(raw, bodyStart).forEach { m ->
+                val prefixEnd = m.range.last + 1   // first char of heading content
+                val hashLen   = m.groupValues[1].length
+                val nextNl    = raw.indexOf('\n', prefixEnd)
+                val lineEnd   = if (nextNl == -1) raw.length - 1 else nextNl - 1
+                if (prefixEnd > lineEnd) return@forEach // no content after prefix
+                hiddenRanges += m.range.first until prefixEnd
+                val style = when (hashLen) {
+                    1    -> SpanStyle(fontWeight = FontWeight.Bold,     fontSize = TextUnit(22f, TextUnitType.Sp))
+                    2    -> SpanStyle(fontWeight = FontWeight.Bold,     fontSize = TextUnit(20f, TextUnitType.Sp))
+                    else -> SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = TextUnit(18f, TextUnitType.Sp))
+                }
+                styleRanges += (prefixEnd..lineEnd) to style
             }
         }
 
-        return TransformedText(annotated, OffsetMapping.Identity)
+        // Build boolean hidden array for O(1) lookup
+        val hidden = BooleanArray(raw.length)
+        hiddenRanges.forEach { range ->
+            for (i in range) if (i in hidden.indices) hidden[i] = true
+        }
+
+        // Build offset mapping arrays in a single O(n) pass
+        val o2t = IntArray(raw.length + 1)        // originalToTransformed
+        val t2o = ArrayList<Int>(raw.length + 1)  // transformedToOriginal
+
+        var di = 0
+        for (ri in raw.indices) {
+            o2t[ri] = di
+            if (!hidden[ri]) {
+                t2o += ri
+                di++
+            }
+        }
+        o2t[raw.length] = di
+        t2o += raw.length  // sentinel so offset == displayLength maps to raw.length
+
+        // Build display string
+        val display = buildString(di) {
+            for (ri in raw.indices) if (!hidden[ri]) append(raw[ri])
+        }
+
+        // Build annotated display string
+        val titleDisplayEnd = o2t[titleEnd]
+        val annotated = buildAnnotatedString {
+            append(display)
+            // First line always rendered as title
+            if (titleDisplayEnd > 0) {
+                addStyle(
+                    SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = TextUnit(24f, TextUnitType.Sp)),
+                    0,
+                    titleDisplayEnd,
+                )
+            }
+            // Markdown spans — convert raw ranges to display ranges via o2t
+            styleRanges.forEach { (rawRange, style) ->
+                val ds = o2t[rawRange.first.coerceIn(0, raw.length)]
+                val de = o2t[(rawRange.last + 1).coerceIn(0, raw.length)]
+                if (ds < de) addStyle(style, ds, de)
+            }
+        }
+
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int =
+                o2t[offset.coerceIn(0, raw.length)]
+            override fun transformedToOriginal(offset: Int): Int =
+                t2o.getOrElse(offset.coerceIn(0, t2o.size - 1)) { raw.length }
+        }
+
+        return TransformedText(annotated, mapping)
     }
 }
 
-// ── Formatting Toolbar ────────────────────────────────────────────────────────
+// ── Formatting Toolbar — Liquid Glass ────────────────────────────────────────
 
 @Composable
 private fun FormattingToolbar(
     onBold: () -> Unit,
     onItalic: () -> Unit,
     onUnderline: () -> Unit,
-    onHeading: () -> Unit,
+    onHeading: (Int) -> Unit,
     onBullet: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
+    var headingMenuExpanded by remember { mutableStateOf(false) }
+
+    // Liquid glass: semi-transparent surface + top shimmer + gold accent border
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .imePadding(),
+            .imePadding()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.07f),
+                        Color.Transparent,
+                    ),
+                )
+            ),
     ) {
         Column {
+            // Thin gold accent line — the "glass edge"
             HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
                 thickness = 0.5.dp,
             )
             Row(
@@ -333,8 +393,49 @@ private fun FormattingToolbar(
                 ToolbarButton(icon = Lucide.Bold,      label = "Kalın",       onClick = onBold)
                 ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
                 ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
-                ToolbarButton(icon = Lucide.Heading2,  label = "Başlık",      onClick = onHeading)
-                ToolbarButton(icon = Lucide.List,      label = "Liste",       onClick = onBullet)
+
+                // Heading button — tap opens H1 / H2 / H3 menu
+                Box {
+                    ToolbarButton(
+                        icon    = Lucide.Heading2,
+                        label   = "Başlık",
+                        onClick = { headingMenuExpanded = true },
+                    )
+                    DropdownMenu(
+                        expanded = headingMenuExpanded,
+                        onDismissRequest = { headingMenuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "H1",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                )
+                            },
+                            onClick = { onHeading(1); headingMenuExpanded = false },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "H2",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                )
+                            },
+                            onClick = { onHeading(2); headingMenuExpanded = false },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "H3",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                )
+                            },
+                            onClick = { onHeading(3); headingMenuExpanded = false },
+                        )
+                    }
+                }
+
+                ToolbarButton(icon = Lucide.List, label = "Liste", onClick = onBullet)
 
                 Spacer(Modifier.weight(1f))
 
