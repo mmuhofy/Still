@@ -37,7 +37,6 @@ import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings
 import com.still.app.util.Constants
-import kotlin.math.roundToInt
 
 private val PillBg       = Color(0xFF18181F)
 private val PillActive   = Color(0xFFB8A369)
@@ -128,15 +127,29 @@ private fun PillTabItem(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "pill_size",
     )
-
-    // Bounce scale animation on tap
-    val scale = remember { Animatable(1f) }
-    // Vertical float animation — selected icon floats up slightly
     val floatOffset by animateDpAsState(
         targetValue = if (selected) (-2).dp else 0.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "pill_float",
     )
+
+    val scale = remember { Animatable(1f) }
+
+    LaunchedEffect(selected) {
+        if (selected) {
+            scale.animateTo(
+                targetValue = 0.82f,
+                animationSpec = spring(stiffness = Spring.StiffnessHigh),
+            )
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+            )
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -148,29 +161,10 @@ private fun PillTabItem(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = {
-                    onClick()
-                },
+                onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
-        // Trigger bounce on selection change
-        LaunchedEffect(selected) {
-            if (selected) {
-                scale.animateTo(
-                    targetValue = 0.82f,
-                    animationSpec = spring(stiffness = Spring.StiffnessHigh),
-                )
-                scale.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                )
-            }
-        }
-
         Icon(
             imageVector = icon,
             contentDescription = label,

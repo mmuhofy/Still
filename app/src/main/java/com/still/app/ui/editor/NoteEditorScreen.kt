@@ -1,14 +1,6 @@
 package com.still.app.ui.editor
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,8 +24,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import com.still.app.ui.components.StillDropdownMenu
-import com.still.app.ui.components.StillDropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,8 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -76,6 +64,8 @@ import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.Redo2
 import com.composables.icons.lucide.Underline
 import com.composables.icons.lucide.Undo2
+import com.still.app.ui.components.StillDropdownMenu
+import com.still.app.ui.components.StillDropdownMenuItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,13 +140,13 @@ fun NoteEditorScreen(
         },
         bottomBar = {
             FormattingToolbar(
-                onBold        = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
-                onItalic      = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
-                onUnderline   = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
-                onHeading     = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
-                onBullet      = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
-                onUndo        = { viewModel.onEvent(NoteEditorEvent.Undo) },
-                onRedo        = { viewModel.onEvent(NoteEditorEvent.Redo) },
+                onBold      = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
+                onItalic    = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
+                onUnderline = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
+                onHeading   = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
+                onBullet    = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
+                onUndo      = { viewModel.onEvent(NoteEditorEvent.Undo) },
+                onRedo      = { viewModel.onEvent(NoteEditorEvent.Redo) },
             )
         },
     ) { innerPadding ->
@@ -216,22 +206,13 @@ private fun NoteTextField(
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
 //
-// Hides markdown markers (**, __, _, ##, - ) and applies styles to the inner
-// text only. Because displayed length ≠ raw length a custom OffsetMapping is
-// required so the cursor always lands at the correct visual position.
-//
-// Strategy:
-//   1. Walk the raw string and collect Segment objects — each segment knows its
-//      raw range, its displayed text, and the SpanStyle to apply.
-//   2. Build two parallel int arrays: rawToDisplay and displayToRaw.
-//   3. Construct the final AnnotatedString from the display text + styles.
+// Hides markdown markers (**, __, _, #, - ) and applies styles to inner text.
+// Custom OffsetMapping keeps cursor at correct raw position at all times.
 
 private class MarkdownVisualTransformation : VisualTransformation {
 
     private sealed class Segment {
-        /** Raw characters that are kept in the display string */
         data class Visible(val rawStart: Int, val rawEnd: Int, val style: SpanStyle? = null) : Segment()
-        /** Raw characters that are hidden (markers) */
         data class Hidden(val rawStart: Int, val rawEnd: Int) : Segment()
     }
 
@@ -241,22 +222,15 @@ private class MarkdownVisualTransformation : VisualTransformation {
 
         val segments = buildSegments(raw)
 
-        // ── Build display string and offset maps ──────────────────────────
-        // rawToDisplay[i] = display index that raw index i maps to
-        // displayToRaw[j] = raw index that display index j maps to
         val rawToDisplay = IntArray(raw.length + 1)
         val displayToRaw = mutableListOf<Int>()
-
         val displayBuilder = StringBuilder()
 
         for (seg in segments) {
             when (seg) {
                 is Segment.Hidden -> {
-                    // Hidden chars all map to the same display position (current end)
                     val displayPos = displayBuilder.length
-                    for (i in seg.rawStart until seg.rawEnd) {
-                        rawToDisplay[i] = displayPos
-                    }
+                    for (i in seg.rawStart until seg.rawEnd) rawToDisplay[i] = displayPos
                 }
                 is Segment.Visible -> {
                     for (i in seg.rawStart until seg.rawEnd) {
@@ -267,14 +241,11 @@ private class MarkdownVisualTransformation : VisualTransformation {
                 }
             }
         }
-        // Sentinel: end position
         rawToDisplay[raw.length] = displayBuilder.length
         displayToRaw.add(raw.length)
 
-        // ── Build AnnotatedString with styles ─────────────────────────────
         val annotated = buildAnnotatedString {
             append(displayBuilder.toString())
-
             for (seg in segments) {
                 if (seg is Segment.Visible && seg.style != null) {
                     val dStart = rawToDisplay[seg.rawStart]
@@ -287,20 +258,12 @@ private class MarkdownVisualTransformation : VisualTransformation {
         val offsetMapping = object : OffsetMapping {
             override fun originalToTransformed(offset: Int): Int =
                 rawToDisplay[offset.coerceIn(0, raw.length)]
-
             override fun transformedToOriginal(offset: Int): Int =
                 displayToRaw.getOrElse(offset.coerceIn(0, displayToRaw.lastIndex)) { raw.length }
         }
 
         return TransformedText(annotated, offsetMapping)
     }
-
-    // ── Segment builder ───────────────────────────────────────────────────────
-    //
-    // Processes the raw string line-by-line.
-    // Line 0 (title) → Visible with SemiBold 24sp, no markdown parsing.
-    // Lines 1+ → inline markdown parsed (bold, underline, italic), then
-    //            heading / bullet prefix handled at line level.
 
     private fun buildSegments(raw: String): List<Segment> {
         val result = mutableListOf<Segment>()
@@ -311,7 +274,7 @@ private class MarkdownVisualTransformation : VisualTransformation {
             val lineStart = rawCursor
 
             if (lineIndex == 0) {
-                // Title line — no markdown, just style
+                // Title line — no markdown parsing, always SemiBold 24sp
                 if (line.isNotEmpty()) {
                     result += Segment.Visible(
                         rawStart = lineStart,
@@ -323,46 +286,38 @@ private class MarkdownVisualTransformation : VisualTransformation {
                     )
                 }
             } else {
-                // Detect line-level prefix
                 val headingMatch = Regex("""^(#{1,3}) """).find(line)
                 val isBullet     = line.startsWith("- ")
 
-                val (contentStart, lineStyle) = when {
+                when {
                     headingMatch != null -> {
-                        val prefixLen = headingMatch.value.length // e.g. "## " = 3
+                        val prefixLen = headingMatch.value.length
                         val fs = when (headingMatch.groupValues[1].length) {
                             1    -> TextUnit(22f, TextUnitType.Sp)
                             2    -> TextUnit(20f, TextUnitType.Sp)
                             else -> TextUnit(18f, TextUnitType.Sp)
                         }
-                        Pair(prefixLen, SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs))
+                        // Hide "# " prefix
+                        result += Segment.Hidden(lineStart, lineStart + prefixLen)
+                        if (prefixLen < line.length) {
+                            result += Segment.Visible(
+                                rawStart = lineStart + prefixLen,
+                                rawEnd   = lineStart + line.length,
+                                style    = SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs),
+                            )
+                        }
                     }
-                    isBullet -> Pair(2, null) // hide "- ", replace with "• " below
-                    else     -> Pair(0, null)
-                }
-
-                if (headingMatch != null) {
-                    // Hide the "## " prefix
-                    result += Segment.Hidden(lineStart, lineStart + contentStart)
-                    // Visible content with heading style
-                    if (contentStart < line.length) {
-                        result += Segment.Visible(
-                            rawStart = lineStart + contentStart,
-                            rawEnd   = lineStart + line.length,
-                            style    = lineStyle,
-                        )
+                    isBullet -> {
+                        // Hide "- " and parse inline markdown in the rest
+                        result += Segment.Hidden(lineStart, lineStart + 2)
+                        parseInline(raw, lineStart + 2, lineStart + line.length, result)
                     }
-                } else if (isBullet) {
-                    // Hide "- " and the inline content handles itself
-                    result += Segment.Hidden(lineStart, lineStart + 2)
-                    parseInline(raw, lineStart + 2, lineStart + line.length, result)
-                } else {
-                    parseInline(raw, lineStart, lineStart + line.length, result)
+                    else -> parseInline(raw, lineStart, lineStart + line.length, result)
                 }
             }
 
             rawCursor += line.length
-            // Add the newline character as visible (unstyled) if not the last line
+            // Newline character — always visible, no style
             if (rawCursor < raw.length) {
                 result += Segment.Visible(rawStart = rawCursor, rawEnd = rawCursor + 1)
                 rawCursor += 1
@@ -371,10 +326,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
 
         return result
     }
-
-    // ── Inline markdown parser ────────────────────────────────────────────────
-    // Finds bold/underline/italic spans within [regionStart, regionEnd) of raw.
-    // Markers are Hidden segments; inner text is Visible with appropriate style.
 
     private val underlineRe = Regex("""__(.*?)__""")
     private val boldRe      = Regex("""\*\*(.*?)\*\*""")
@@ -389,7 +340,11 @@ private class MarkdownVisualTransformation : VisualTransformation {
         if (regionStart >= regionEnd) return
         val slice = raw.substring(regionStart, regionEnd)
 
-        data class Span(val start: Int, val end: Int, val innerStart: Int, val innerEnd: Int, val style: SpanStyle)
+        data class Span(
+            val start: Int, val end: Int,
+            val innerStart: Int, val innerEnd: Int,
+            val style: SpanStyle,
+        )
 
         val spans = mutableListOf<Span>()
 
@@ -399,40 +354,32 @@ private class MarkdownVisualTransformation : VisualTransformation {
                 SpanStyle(textDecoration = TextDecoration.Underline))
         }
         boldRe.findAll(slice).forEach { m ->
-            if (spans.none { s -> m.range.first in s.start until s.end }) {
+            if (spans.none { s -> m.range.first in s.start until s.end })
                 spans += Span(m.range.first, m.range.last + 1,
                     m.range.first + 2, m.range.last - 1,
                     SpanStyle(fontWeight = FontWeight.Bold))
-            }
         }
         italicRe.findAll(slice).forEach { m ->
-            if (spans.none { s -> m.range.first in s.start until s.end }) {
+            if (spans.none { s -> m.range.first in s.start until s.end })
                 spans += Span(m.range.first, m.range.last + 1,
                     m.range.first + 1, m.range.last,
                     SpanStyle(fontStyle = FontStyle.Italic))
-            }
         }
 
         spans.sortBy { it.start }
 
         var cursor = 0
         for (span in spans) {
-            if (span.start > cursor) {
+            if (span.start > cursor)
                 out += Segment.Visible(regionStart + cursor, regionStart + span.start)
-            }
-            // Opening marker(s)
             out += Segment.Hidden(regionStart + span.start, regionStart + span.innerStart)
-            // Inner content
-            if (span.innerStart < span.innerEnd) {
+            if (span.innerStart < span.innerEnd)
                 out += Segment.Visible(regionStart + span.innerStart, regionStart + span.innerEnd, span.style)
-            }
-            // Closing marker(s)
             out += Segment.Hidden(regionStart + span.innerEnd, regionStart + span.end)
             cursor = span.end
         }
-        if (cursor < slice.length) {
+        if (cursor < slice.length)
             out += Segment.Visible(regionStart + cursor, regionEnd)
-        }
     }
 }
 
@@ -475,10 +422,56 @@ private fun FormattingToolbar(
             ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
             ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
 
-            // Heading button — standard DropdownMenu with H1/H2/H3
             Box {
                 IconButton(
                     onClick = { headingMenuExpanded = true },
                     modifier = Modifier.size(40.dp),
                 ) {
-                    I
+                    Icon(
+                        imageVector = Lucide.Heading2,
+                        contentDescription = "Başlık",
+                        tint = if (headingMenuExpanded)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                StillDropdownMenu(
+                    expanded = headingMenuExpanded,
+                    onDismissRequest = { headingMenuExpanded = false },
+                ) {
+                    listOf("H1" to 1, "H2" to 2, "H3" to 3).forEach { (label, level) ->
+                        StillDropdownMenuItem(
+                            text = label,
+                            onClick = {
+                                onHeading(level)
+                                headingMenuExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            ToolbarButton(icon = Lucide.List,  label = "Liste",    onClick = onBullet)
+
+            Spacer(Modifier.weight(1f))
+
+            ToolbarButton(icon = Lucide.Undo2, label = "Geri al",  onClick = onUndo)
+            ToolbarButton(icon = Lucide.Redo2, label = "Yinele",   onClick = onRedo)
+            Spacer(Modifier.width(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
