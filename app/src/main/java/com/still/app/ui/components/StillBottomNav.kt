@@ -1,7 +1,8 @@
 package com.still.app.ui.components
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -13,29 +14,34 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings
 import com.still.app.util.Constants
+import kotlin.math.roundToInt
 
 private val PillBg       = Color(0xFF18181F)
 private val PillActive   = Color(0xFFB8A369)
-private val PillInactive = Color(0x66FFFFFF)
+private val PillInactive = Color(0x55FFFFFF)
 
 sealed class BottomNavTab(
     val route: String,
@@ -64,13 +70,11 @@ fun StillBottomNav(
     onTabSelected: (BottomNavTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // fillMaxWidth ensures the Box spans full screen width so Alignment.Center
-    // places the pill at the horizontal center, not the left edge.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 16.dp),
+            .padding(bottom = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -78,18 +82,16 @@ fun StillBottomNav(
                 .shadow(
                     elevation = 32.dp,
                     shape = RoundedCornerShape(50),
-                    ambientColor = Color.Black.copy(alpha = 0.6f),
-                    spotColor = Color.Black.copy(alpha = 0.6f),
+                    ambientColor = Color.Black.copy(alpha = 0.7f),
+                    spotColor = Color.Black.copy(alpha = 0.7f),
                 )
                 .clip(RoundedCornerShape(50))
-                // Outer dark shell
                 .background(PillBg)
-                // 1dp border via inner padding + re-clip
                 .padding(1.dp)
                 .clip(RoundedCornerShape(50))
                 .background(PillBg.copy(alpha = 0.96f))
-                .padding(horizontal = 10.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BottomNavTab.tabs.forEach { tab ->
@@ -117,7 +119,7 @@ private fun PillTabItem(
         label = "pill_tint",
     )
     val bgColor by animateColorAsState(
-        targetValue = if (selected) PillActive.copy(alpha = 0.18f) else Color.Transparent,
+        targetValue = if (selected) PillActive.copy(alpha = 0.16f) else Color.Transparent,
         animationSpec = tween(Constants.ANIMATION_DURATION_MS),
         label = "pill_bg",
     )
@@ -127,18 +129,48 @@ private fun PillTabItem(
         label = "pill_size",
     )
 
+    // Bounce scale animation on tap
+    val scale = remember { Animatable(1f) }
+    // Vertical float animation — selected icon floats up slightly
+    val floatOffset by animateDpAsState(
+        targetValue = if (selected) (-2).dp else 0.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "pill_float",
+    )
+
     Box(
         modifier = Modifier
             .size(itemSize)
+            .offset { IntOffset(0, floatOffset.roundToPx()) }
             .clip(CircleShape)
             .background(bgColor)
+            .scale(scale.value)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {
+        // Trigger bounce on selection change
+        LaunchedEffect(selected) {
+            if (selected) {
+                scale.animateTo(
+                    targetValue = 0.82f,
+                    animationSpec = spring(stiffness = Spring.StiffnessHigh),
+                )
+                scale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium,
+                    ),
+                )
+            }
+        }
+
         Icon(
             imageVector = icon,
             contentDescription = label,

@@ -23,7 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +32,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import com.still.app.ui.components.StillDropdownMenu
+import com.still.app.ui.components.StillDropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -127,18 +128,13 @@ fun NoteEditorScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        DropdownMenu(
+                        StillDropdownMenu(
                             expanded = overflowExpanded,
                             onDismissRequest = { overflowExpanded = false },
                         ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Sil",
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                },
+                            StillDropdownMenuItem(
+                                text = "Sil",
+                                color = MaterialTheme.colorScheme.error,
                                 onClick = {
                                     overflowExpanded = false
                                     viewModel.onEvent(NoteEditorEvent.DeleteNote)
@@ -219,52 +215,224 @@ private fun NoteTextField(
 }
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
+//
+// Hides markdown markers (**, __, _, ##, - ) and applies styles to the inner
+// text only. Because displayed length ≠ raw length a custom OffsetMapping is
+// required so the cursor always lands at the correct visual position.
+//
+// Strategy:
+//   1. Walk the raw string and collect Segment objects — each segment knows its
+//      raw range, its displayed text, and the SpanStyle to apply.
+//   2. Build two parallel int arrays: rawToDisplay and displayToRaw.
+//   3. Construct the final AnnotatedString from the display text + styles.
 
 private class MarkdownVisualTransformation : VisualTransformation {
 
-    private val underlineRegex = Regex("""__(.*?)__""")
-    private val boldRegex      = Regex("""\*\*(.*?)\*\*""")
-    private val italicRegex    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
-    private val headingRegex   = Regex("""^#{1,3} .+""", RegexOption.MULTILINE)
+    private sealed class Segment {
+        /** Raw characters that are kept in the display string */
+        data class Visible(val rawStart: Int, val rawEnd: Int, val style: SpanStyle? = null) : Segment()
+        /** Raw characters that are hidden (markers) */
+        data class Hidden(val rawStart: Int, val rawEnd: Int) : Segment()
+    }
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
-        val firstNewline = raw.indexOf('\n')
-        val titleEnd = if (firstNewline == -1) raw.length else firstNewline
+        if (raw.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
 
+        val segments = buildSegments(raw)
+
+        // ── Build display string and offset maps ──────────────────────────
+        // rawToDisplay[i] = display index that raw index i maps to
+        // displayToRaw[j] = raw index that display index j maps to
+        val rawToDisplay = IntArray(raw.length + 1)
+        val displayToRaw = mutableListOf<Int>()
+
+        val displayBuilder = StringBuilder()
+
+        for (seg in segments) {
+            when (seg) {
+                is Segment.Hidden -> {
+                    // Hidden chars all map to the same display position (current end)
+                    val displayPos = displayBuilder.length
+                    for (i in seg.rawStart until seg.rawEnd) {
+                        rawToDisplay[i] = displayPos
+                    }
+                }
+                is Segment.Visible -> {
+                    for (i in seg.rawStart until seg.rawEnd) {
+                        rawToDisplay[i] = displayBuilder.length
+                        displayToRaw.add(i)
+                        displayBuilder.append(raw[i])
+                    }
+                }
+            }
+        }
+        // Sentinel: end position
+        rawToDisplay[raw.length] = displayBuilder.length
+        displayToRaw.add(raw.length)
+
+        // ── Build AnnotatedString with styles ─────────────────────────────
         val annotated = buildAnnotatedString {
-            append(raw)
+            append(displayBuilder.toString())
 
-            // Title line — SemiBold 24sp
-            if (titleEnd > 0) {
-                addStyle(
-                    SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = TextUnit(24f, TextUnitType.Sp)),
-                    start = 0, end = titleEnd,
-                )
-            }
-
-            val bodyStart = if (firstNewline == -1) raw.length else firstNewline + 1
-            if (bodyStart >= raw.length) return@buildAnnotatedString
-
-            // Underline before italic so __ is consumed first
-            underlineRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(SpanStyle(textDecoration = TextDecoration.Underline), m.range.first, m.range.last + 1)
-            }
-            boldRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(SpanStyle(fontWeight = FontWeight.Bold), m.range.first, m.range.last + 1)
-            }
-            italicRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(SpanStyle(fontStyle = FontStyle.Italic), m.range.first, m.range.last + 1)
-            }
-            headingRegex.findAll(raw, bodyStart).forEach { m ->
-                addStyle(
-                    SpanStyle(fontWeight = FontWeight.Bold, fontSize = TextUnit(20f, TextUnitType.Sp)),
-                    m.range.first, m.range.last + 1,
-                )
+            for (seg in segments) {
+                if (seg is Segment.Visible && seg.style != null) {
+                    val dStart = rawToDisplay[seg.rawStart]
+                    val dEnd   = rawToDisplay[seg.rawEnd.coerceAtMost(raw.length)]
+                    if (dStart < dEnd) addStyle(seg.style, dStart, dEnd)
+                }
             }
         }
 
-        return TransformedText(annotated, OffsetMapping.Identity)
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int =
+                rawToDisplay[offset.coerceIn(0, raw.length)]
+
+            override fun transformedToOriginal(offset: Int): Int =
+                displayToRaw.getOrElse(offset.coerceIn(0, displayToRaw.lastIndex)) { raw.length }
+        }
+
+        return TransformedText(annotated, offsetMapping)
+    }
+
+    // ── Segment builder ───────────────────────────────────────────────────────
+    //
+    // Processes the raw string line-by-line.
+    // Line 0 (title) → Visible with SemiBold 24sp, no markdown parsing.
+    // Lines 1+ → inline markdown parsed (bold, underline, italic), then
+    //            heading / bullet prefix handled at line level.
+
+    private fun buildSegments(raw: String): List<Segment> {
+        val result = mutableListOf<Segment>()
+        val lines = raw.lines()
+        var rawCursor = 0
+
+        lines.forEachIndexed { lineIndex, line ->
+            val lineStart = rawCursor
+
+            if (lineIndex == 0) {
+                // Title line — no markdown, just style
+                if (line.isNotEmpty()) {
+                    result += Segment.Visible(
+                        rawStart = lineStart,
+                        rawEnd   = lineStart + line.length,
+                        style    = SpanStyle(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize   = TextUnit(24f, TextUnitType.Sp),
+                        ),
+                    )
+                }
+            } else {
+                // Detect line-level prefix
+                val headingMatch = Regex("""^(#{1,3}) """).find(line)
+                val isBullet     = line.startsWith("- ")
+
+                val (contentStart, lineStyle) = when {
+                    headingMatch != null -> {
+                        val prefixLen = headingMatch.value.length // e.g. "## " = 3
+                        val fs = when (headingMatch.groupValues[1].length) {
+                            1    -> TextUnit(22f, TextUnitType.Sp)
+                            2    -> TextUnit(20f, TextUnitType.Sp)
+                            else -> TextUnit(18f, TextUnitType.Sp)
+                        }
+                        Pair(prefixLen, SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs))
+                    }
+                    isBullet -> Pair(2, null) // hide "- ", replace with "• " below
+                    else     -> Pair(0, null)
+                }
+
+                if (headingMatch != null) {
+                    // Hide the "## " prefix
+                    result += Segment.Hidden(lineStart, lineStart + contentStart)
+                    // Visible content with heading style
+                    if (contentStart < line.length) {
+                        result += Segment.Visible(
+                            rawStart = lineStart + contentStart,
+                            rawEnd   = lineStart + line.length,
+                            style    = lineStyle,
+                        )
+                    }
+                } else if (isBullet) {
+                    // Hide "- " and the inline content handles itself
+                    result += Segment.Hidden(lineStart, lineStart + 2)
+                    parseInline(raw, lineStart + 2, lineStart + line.length, result)
+                } else {
+                    parseInline(raw, lineStart, lineStart + line.length, result)
+                }
+            }
+
+            rawCursor += line.length
+            // Add the newline character as visible (unstyled) if not the last line
+            if (rawCursor < raw.length) {
+                result += Segment.Visible(rawStart = rawCursor, rawEnd = rawCursor + 1)
+                rawCursor += 1
+            }
+        }
+
+        return result
+    }
+
+    // ── Inline markdown parser ────────────────────────────────────────────────
+    // Finds bold/underline/italic spans within [regionStart, regionEnd) of raw.
+    // Markers are Hidden segments; inner text is Visible with appropriate style.
+
+    private val underlineRe = Regex("""__(.*?)__""")
+    private val boldRe      = Regex("""\*\*(.*?)\*\*""")
+    private val italicRe    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
+
+    private fun parseInline(
+        raw: String,
+        regionStart: Int,
+        regionEnd: Int,
+        out: MutableList<Segment>,
+    ) {
+        if (regionStart >= regionEnd) return
+        val slice = raw.substring(regionStart, regionEnd)
+
+        data class Span(val start: Int, val end: Int, val innerStart: Int, val innerEnd: Int, val style: SpanStyle)
+
+        val spans = mutableListOf<Span>()
+
+        underlineRe.findAll(slice).forEach { m ->
+            spans += Span(m.range.first, m.range.last + 1,
+                m.range.first + 2, m.range.last - 1,
+                SpanStyle(textDecoration = TextDecoration.Underline))
+        }
+        boldRe.findAll(slice).forEach { m ->
+            if (spans.none { s -> m.range.first in s.start until s.end }) {
+                spans += Span(m.range.first, m.range.last + 1,
+                    m.range.first + 2, m.range.last - 1,
+                    SpanStyle(fontWeight = FontWeight.Bold))
+            }
+        }
+        italicRe.findAll(slice).forEach { m ->
+            if (spans.none { s -> m.range.first in s.start until s.end }) {
+                spans += Span(m.range.first, m.range.last + 1,
+                    m.range.first + 1, m.range.last,
+                    SpanStyle(fontStyle = FontStyle.Italic))
+            }
+        }
+
+        spans.sortBy { it.start }
+
+        var cursor = 0
+        for (span in spans) {
+            if (span.start > cursor) {
+                out += Segment.Visible(regionStart + cursor, regionStart + span.start)
+            }
+            // Opening marker(s)
+            out += Segment.Hidden(regionStart + span.start, regionStart + span.innerStart)
+            // Inner content
+            if (span.innerStart < span.innerEnd) {
+                out += Segment.Visible(regionStart + span.innerStart, regionStart + span.innerEnd, span.style)
+            }
+            // Closing marker(s)
+            out += Segment.Hidden(regionStart + span.innerEnd, regionStart + span.end)
+            cursor = span.end
+        }
+        if (cursor < slice.length) {
+            out += Segment.Visible(regionStart + cursor, regionEnd)
+        }
     }
 }
 
@@ -313,56 +481,4 @@ private fun FormattingToolbar(
                     onClick = { headingMenuExpanded = true },
                     modifier = Modifier.size(40.dp),
                 ) {
-                    Icon(
-                        imageVector = Lucide.Heading2,
-                        contentDescription = "Başlık",
-                        tint = if (headingMenuExpanded)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                DropdownMenu(
-                    expanded = headingMenuExpanded,
-                    onDismissRequest = { headingMenuExpanded = false },
-                ) {
-                    listOf(1, 2, 3).forEach { level ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "H$level",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            },
-                            onClick = {
-                                onHeading(level)
-                                headingMenuExpanded = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            ToolbarButton(icon = Lucide.List, label = "Liste", onClick = onBullet)
-
-            Spacer(Modifier.weight(1f))
-
-            ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
-            ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
-            Spacer(Modifier.width(4.dp))
-        }
-    }
-}
-
-@Composable
-private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+                    I
