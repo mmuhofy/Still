@@ -44,11 +44,11 @@ import kotlinx.coroutines.flow.first
 
 object Routes {
     const val ARG_NOTE_ID = "noteId"
-    const val ONBOARDING = "onboarding"
-    const val NOTES_LIST = "notes_list"
+    const val ONBOARDING  = "onboarding"
+    const val NOTES_LIST  = "notes_list"
     const val NOTE_EDITOR = "note_editor/{$ARG_NOTE_ID}"
-    const val SEARCH = "search"
-    const val SETTINGS = "settings"
+    const val SEARCH      = "search"
+    const val SETTINGS    = "settings"
 
     fun noteEditor(noteId: Long = -1L) = "note_editor/$noteId"
 
@@ -77,9 +77,10 @@ fun StillNavHost(
 
     val startDestination = if (onboardingCompleted == true) Routes.NOTES_LIST else Routes.ONBOARDING
     val showBottomNav = currentRoute in Routes.bottomNavRoutes
-    val showFab = currentRoute == Routes.NOTES_LIST
+    val showFab       = currentRoute == Routes.NOTES_LIST
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomNav) {
                 StillBottomNav(
@@ -116,8 +117,8 @@ fun StillNavHost(
                         topPadding = innerPadding.calculateTopPadding(),
                         bottomPadding = innerPadding.calculateBottomPadding(),
                         onNoteClick = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
-                        onNewNote = { navController.navigate(Routes.noteEditor()) },
-                        onSearchClick = { navController.navigate(Routes.SEARCH) },
+                        onNewNote   = { navController.navigate(Routes.noteEditor()) },
+                        onSearchClick  = { navController.navigate(Routes.SEARCH) },
                         onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                     )
                 }
@@ -149,14 +150,16 @@ fun StillNavHost(
                 }
             }
 
+            // FAB floats above the pill nav bar
+            // pill = navigationBarsPadding + 16dp bottom + ~68dp height ≈ 84dp above inset
             AnimatedVisibility(
                 visible = showFab,
                 enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
+                exit  = fadeOut() + scaleOut(),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(end = 20.dp, bottom = innerPadding.calculateBottomPadding() + 20.dp),
+                    .padding(end = 20.dp, bottom = 96.dp), // 96 = pill height(68) + gap(28)
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { navController.navigate(Routes.noteEditor()) },

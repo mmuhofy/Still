@@ -1,6 +1,14 @@
 package com.still.app.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -80,7 +90,6 @@ fun NoteEditorScreen(
         if (state.isDeleted) onBack()
     }
 
-    // Fires exactly once — auto-focus only for new notes
     LaunchedEffect(Unit) {
         if (state.noteId == -1L) focusRequester.requestFocus()
     }
@@ -145,13 +154,13 @@ fun NoteEditorScreen(
         },
         bottomBar = {
             FormattingToolbar(
-                onBold      = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
-                onItalic    = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
-                onUnderline = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
-                onHeading   = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
-                onBullet    = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
-                onUndo      = { viewModel.onEvent(NoteEditorEvent.Undo) },
-                onRedo      = { viewModel.onEvent(NoteEditorEvent.Redo) },
+                onBold        = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
+                onItalic      = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
+                onUnderline   = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
+                onHeading     = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
+                onBullet      = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
+                onUndo        = { viewModel.onEvent(NoteEditorEvent.Undo) },
+                onRedo        = { viewModel.onEvent(NoteEditorEvent.Redo) },
             )
         },
     ) { innerPadding ->
@@ -193,10 +202,6 @@ private fun NoteTextField(
             color = MaterialTheme.colorScheme.onBackground,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        // MarkdownVisualTransformation:
-        //   - Hides markers (**bold** → bold, ## H → H)
-        //   - Applies corresponding SpanStyles on visible content
-        //   - Custom OffsetMapping keeps cursor in the correct raw position
         visualTransformation = remember { MarkdownVisualTransformation() },
         decorationBox = { innerTextField ->
             Box {
@@ -214,225 +219,163 @@ private fun NoteTextField(
 }
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
-//
-// Hides markdown marker characters and applies styles to the visible content.
-// Since display text length ≠ raw text length, a custom OffsetMapping is built
-// from two parallel arrays so that cursor and selection always point to the
-// correct position in the underlying raw TextFieldValue.
-//
-// Supported syntax:
-//   First line       → SemiBold 24sp  (title — always)
-//   **text**         → Bold           (markers hidden)
-//   __text__         → Underline      (markers hidden — processed before _)
-//   _text_           → Italic         (markers hidden)
-//   # / ## / ### H   → Heading style  (prefix hidden)
 
 private class MarkdownVisualTransformation : VisualTransformation {
 
-    // Heading: match only the prefix (# + space) — no need to match the full line
-    private val headingPrefixRegex = Regex("""^(#{1,3}) """, RegexOption.MULTILINE)
-    private val boldRegex          = Regex("""\*\*(.*?)\*\*""")
-    private val italicRegex        = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
-    private val underlineRegex     = Regex("""__(.*?)__""")
+    private val underlineRegex = Regex("""__(.*?)__""")
+    private val boldRegex      = Regex("""\*\*(.*?)\*\*""")
+    private val italicRegex    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
+    private val headingRegex   = Regex("""^#{1,3} .+""", RegexOption.MULTILINE)
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
-        if (raw.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
-
         val firstNewline = raw.indexOf('\n')
-        val titleEnd     = if (firstNewline == -1) raw.length else firstNewline
-        val bodyStart    = if (firstNewline == -1) raw.length else firstNewline + 1
+        val titleEnd = if (firstNewline == -1) raw.length else firstNewline
 
-        // raw content ranges with their styles (inclusive IntRange)
-        val styleRanges   = mutableListOf<Pair<IntRange, SpanStyle>>()
-        // raw ranges of characters to hide
-        val hiddenRanges  = mutableListOf<IntRange>()
-        // full raw ranges already owned by an inline span (overlap guard)
-        val claimedRanges = mutableListOf<IntRange>()
-
-        // Try to register an inline span (bold / italic / underline).
-        // markerLen = number of marker chars on each side (**=2, _=1, __=2).
-        fun tryInline(matchRange: IntRange, markerLen: Int, style: SpanStyle) {
-            val cs = matchRange.first + markerLen
-            val ce = matchRange.last  - markerLen
-            if (cs > ce) return // empty content
-            if (claimedRanges.any { it.first <= matchRange.last && it.last >= matchRange.first }) return
-            claimedRanges += matchRange
-            hiddenRanges  += matchRange.first until cs       // opening marker
-            hiddenRanges  += (ce + 1)..matchRange.last       // closing marker
-            styleRanges   += (cs..ce) to style
-        }
-
-        if (bodyStart < raw.length) {
-            // Underline __ BEFORE italic _ (same order as MarkdownRenderer)
-            underlineRegex.findAll(raw, bodyStart).forEach { m ->
-                tryInline(m.range, 2, SpanStyle(textDecoration = TextDecoration.Underline))
-            }
-            boldRegex.findAll(raw, bodyStart).forEach { m ->
-                tryInline(m.range, 2, SpanStyle(fontWeight = FontWeight.Bold))
-            }
-            italicRegex.findAll(raw, bodyStart).forEach { m ->
-                tryInline(m.range, 1, SpanStyle(fontStyle = FontStyle.Italic))
-            }
-
-            // Headings — processed independently (line-level, coexists with inline spans)
-            headingPrefixRegex.findAll(raw, bodyStart).forEach { m ->
-                val prefixEnd = m.range.last + 1   // first char of heading content
-                val hashLen   = m.groupValues[1].length
-                val nextNl    = raw.indexOf('\n', prefixEnd)
-                val lineEnd   = if (nextNl == -1) raw.length - 1 else nextNl - 1
-                if (prefixEnd > lineEnd) return@forEach // no content after prefix
-                hiddenRanges += m.range.first until prefixEnd
-                val style = when (hashLen) {
-                    1    -> SpanStyle(fontWeight = FontWeight.Bold,     fontSize = TextUnit(22f, TextUnitType.Sp))
-                    2    -> SpanStyle(fontWeight = FontWeight.Bold,     fontSize = TextUnit(20f, TextUnitType.Sp))
-                    else -> SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = TextUnit(18f, TextUnitType.Sp))
-                }
-                styleRanges += (prefixEnd..lineEnd) to style
-            }
-        }
-
-        // Build boolean hidden array for O(1) lookup
-        val hidden = BooleanArray(raw.length)
-        hiddenRanges.forEach { range ->
-            for (i in range) if (i in hidden.indices) hidden[i] = true
-        }
-
-        // Build offset mapping arrays in a single O(n) pass
-        val o2t = IntArray(raw.length + 1)        // originalToTransformed
-        val t2o = ArrayList<Int>(raw.length + 1)  // transformedToOriginal
-
-        var di = 0
-        for (ri in raw.indices) {
-            o2t[ri] = di
-            if (!hidden[ri]) {
-                t2o += ri
-                di++
-            }
-        }
-        o2t[raw.length] = di
-        t2o += raw.length  // sentinel so offset == displayLength maps to raw.length
-
-        // Build display string
-        val display = buildString(di) {
-            for (ri in raw.indices) if (!hidden[ri]) append(raw[ri])
-        }
-
-        // Build annotated display string
-        val titleDisplayEnd = o2t[titleEnd]
         val annotated = buildAnnotatedString {
-            append(display)
-            // First line always rendered as title
-            if (titleDisplayEnd > 0) {
+            append(raw)
+
+            // Title line — SemiBold 24sp
+            if (titleEnd > 0) {
                 addStyle(
                     SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = TextUnit(24f, TextUnitType.Sp)),
-                    0,
-                    titleDisplayEnd,
+                    start = 0, end = titleEnd,
                 )
             }
-            // Markdown spans — convert raw ranges to display ranges via o2t
-            styleRanges.forEach { (rawRange, style) ->
-                val ds = o2t[rawRange.first.coerceIn(0, raw.length)]
-                val de = o2t[(rawRange.last + 1).coerceIn(0, raw.length)]
-                if (ds < de) addStyle(style, ds, de)
+
+            val bodyStart = if (firstNewline == -1) raw.length else firstNewline + 1
+            if (bodyStart >= raw.length) return@buildAnnotatedString
+
+            // Underline before italic so __ is consumed first
+            underlineRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(SpanStyle(textDecoration = TextDecoration.Underline), m.range.first, m.range.last + 1)
+            }
+            boldRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(SpanStyle(fontWeight = FontWeight.Bold), m.range.first, m.range.last + 1)
+            }
+            italicRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(SpanStyle(fontStyle = FontStyle.Italic), m.range.first, m.range.last + 1)
+            }
+            headingRegex.findAll(raw, bodyStart).forEach { m ->
+                addStyle(
+                    SpanStyle(fontWeight = FontWeight.Bold, fontSize = TextUnit(20f, TextUnitType.Sp)),
+                    m.range.first, m.range.last + 1,
+                )
             }
         }
 
-        val mapping = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int =
-                o2t[offset.coerceIn(0, raw.length)]
-            override fun transformedToOriginal(offset: Int): Int =
-                t2o.getOrElse(offset.coerceIn(0, t2o.size - 1)) { raw.length }
-        }
-
-        return TransformedText(annotated, mapping)
+        return TransformedText(annotated, OffsetMapping.Identity)
     }
 }
 
 // ── Formatting Toolbar — Liquid Glass ────────────────────────────────────────
+
+// Liquid glass palette — slightly luminous tinted glass over the dark surface
+private val GlassBase    = Color(0xFF1E1E2A)
+private val GlassBorder  = Color(0x33FFFFFF)
+private val GlassSheen   = Color(0x0DFFFFFF)
 
 @Composable
 private fun FormattingToolbar(
     onBold: () -> Unit,
     onItalic: () -> Unit,
     onUnderline: () -> Unit,
-    onHeading: (Int) -> Unit,
+    onHeading: (level: Int) -> Unit,
     onBullet: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
-    var headingMenuExpanded by remember { mutableStateOf(false) }
+    var headingExpanded by remember { mutableStateOf(false) }
 
-    // Liquid glass: semi-transparent surface + top shimmer + gold accent border
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .imePadding()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.07f),
-                        Color.Transparent,
-                    ),
-                )
-            ),
+            .imePadding(),
     ) {
-        Column {
-            // Thin gold accent line — the "glass edge"
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-                thickness = 0.5.dp,
-            )
+        // ── Heading picker — slides in above toolbar ───────────────────────
+        AnimatedVisibility(
+            visible = headingExpanded,
+            enter = expandVertically(tween(220)) + fadeIn(tween(220)),
+            exit  = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .background(
+                        brush = Brush.verticalGradient(
+                            listOf(GlassBase.copy(alpha = 0.85f), GlassBase.copy(alpha = 0.95f)),
+                        ),
+                    )
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(1, 2, 3).forEach { level ->
+                    HeadingChip(
+                        label = "H$level",
+                        onClick = {
+                            onHeading(level)
+                            headingExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+
+        // ── Thin glass border line ─────────────────────────────────────────
+        HorizontalDivider(color = GlassBorder, thickness = 0.5.dp)
+
+        // ── Main toolbar row ───────────────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Blur layer — simulates frosted glass
+                .blur(0.dp), // real blur requires RenderEffect (API 31+); kept as extension point
+        ) {
+            // Glass background: dark base + subtle vertical sheen
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                GlassBase.copy(alpha = 0.92f),
+                                GlassBase.copy(alpha = 0.98f),
+                            ),
+                        ),
+                    ),
+            )
+            // Top sheen stripe
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .size(height = 1.dp, width = 0.dp) // hairline sheen
+                    .background(GlassSheen),
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ToolbarButton(icon = Lucide.Bold,      label = "Kalın",       onClick = onBold)
                 ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
                 ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
 
-                // Heading button — tap opens H1 / H2 / H3 menu
-                Box {
-                    ToolbarButton(
-                        icon    = Lucide.Heading2,
-                        label   = "Başlık",
-                        onClick = { headingMenuExpanded = true },
+                // Heading button — toggles H1/H2/H3 picker
+                IconButton(
+                    onClick = { headingExpanded = !headingExpanded },
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = Lucide.Heading2,
+                        contentDescription = "Başlık",
+                        tint = if (headingExpanded)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
                     )
-                    DropdownMenu(
-                        expanded = headingMenuExpanded,
-                        onDismissRequest = { headingMenuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "H1",
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                )
-                            },
-                            onClick = { onHeading(1); headingMenuExpanded = false },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "H2",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                )
-                            },
-                            onClick = { onHeading(2); headingMenuExpanded = false },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "H3",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                )
-                            },
-                            onClick = { onHeading(3); headingMenuExpanded = false },
-                        )
-                    }
                 }
 
                 ToolbarButton(icon = Lucide.List, label = "Liste", onClick = onBullet)
@@ -448,15 +391,26 @@ private fun FormattingToolbar(
 }
 
 @Composable
-private fun ToolbarButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp),
+private fun HeadingChip(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(GlassBorder)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
     ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = label,

@@ -45,7 +45,6 @@ data class NoteEditorUiState(
     val isSaving: Boolean = false,
     val isDeleted: Boolean = false,
     val ghostText: String = "",
-    // Length of real text when ghost was set — used to strip ghost in onValueChange
     val realTextLength: Int = 0,
     val isAiLoading: Boolean = false,
     val aiError: String? = null,
@@ -62,7 +61,8 @@ sealed interface NoteEditorEvent {
     data object ApplyBold : NoteEditorEvent
     data object ApplyItalic : NoteEditorEvent
     data object ApplyUnderline : NoteEditorEvent
-    data object ApplyHeading : NoteEditorEvent
+    // level: 1 = "# ", 2 = "## ", 3 = "### "
+    data class ApplyHeading(val level: Int) : NoteEditorEvent
     data object ApplyBullet : NoteEditorEvent
     data object Undo : NoteEditorEvent
     data object Redo : NoteEditorEvent
@@ -99,7 +99,7 @@ class NoteEditorViewModel @Inject constructor(
 
     private var skipNextUndoPush = false
     private var aiJob: Job? = null
-    private var lastAiRequestAt: Long = 0L // epoch ms of last fired request
+    private var lastAiRequestAt: Long = 0L
 
     private val undoStack = ArrayDeque<TextFieldValue>()
     private val redoStack = ArrayDeque<TextFieldValue>()
@@ -141,10 +141,9 @@ class NoteEditorViewModel @Inject constructor(
                 val state = _uiState.value
                 val incoming = event.value
 
-                // ── Enter pressed while ghost is active → accept ghost ─────────
+                // Enter while ghost active → accept ghost
                 if (state.ghostText.isNotBlank()) {
                     val realLen = state.realTextLength
-                    // Strip any ghost that may have leaked into incoming text
                     val realText = incoming.text.take(realLen)
                     val pressedEnter = incoming.text.length > realLen &&
                             incoming.text.getOrNull(realLen) == '\n'
@@ -152,7 +151,6 @@ class NoteEditorViewModel @Inject constructor(
                         acceptGhostInternal()
                         return
                     }
-                    // Any other key dismisses ghost and applies the real keystroke
                     val cleaned = TextFieldValue(
                         text = realText + incoming.text.drop(
                             realLen + state.ghostText.length
@@ -166,7 +164,6 @@ class NoteEditorViewModel @Inject constructor(
                     return
                 }
 
-                // ── Normal typing ─────────────────────────────────────────────
                 val current = state.content
                 if (skipNextUndoPush) {
                     skipNextUndoPush = false
@@ -190,24 +187,14 @@ class NoteEditorViewModel @Inject constructor(
             NoteEditorEvent.Undo -> {
                 if (undoStack.isNotEmpty()) {
                     redoStack.addLast(_uiState.value.content)
-                    _uiState.update {
-                        it.copy(
-                            content = undoStack.removeLast(),
-                            ghostText = "",
-                        )
-                    }
+                    _uiState.update { it.copy(content = undoStack.removeLast(), ghostText = "") }
                 }
             }
 
             NoteEditorEvent.Redo -> {
                 if (redoStack.isNotEmpty()) {
                     undoStack.addLast(_uiState.value.content)
-                    _uiState.update {
-                        it.copy(
-                            content = redoStack.removeLast(),
-                            ghostText = "",
-                        )
-                    }
+                    _uiState.update { it.copy(content = redoStack.removeLast(), ghostText = "") }
                 }
             }
 
@@ -226,13 +213,19 @@ class NoteEditorViewModel @Inject constructor(
                 }
             }
 
-            NoteEditorEvent.ApplyBold -> applyInlineFormat("**")
-            NoteEditorEvent.ApplyItalic -> applyInlineFormat("_")
+            NoteEditorEvent.ApplyBold      -> applyInlineFormat("**")
+            NoteEditorEvent.ApplyItalic    -> applyInlineFormat("_")
             NoteEditorEvent.ApplyUnderline -> applyInlineFormat("__")
-            NoteEditorEvent.ApplyHeading -> applyLinePrefix("## ")
-            NoteEditorEvent.ApplyBullet -> applyLinePrefix("- ")
 
-            NoteEditorEvent.AcceptGhost -> acceptGhostInternal()
+            // H1 = "# ", H2 = "## ", H3 = "### "
+            is NoteEditorEvent.ApplyHeading -> {
+                val prefix = "#".repeat(event.level.coerceIn(1, 3)) + " "
+                applyLinePrefix(prefix)
+            }
+
+            NoteEditorEvent.ApplyBullet    -> applyLinePrefix("- ")
+
+            NoteEditorEvent.AcceptGhost    -> acceptGhostInternal()
 
             NoteEditorEvent.DismissGhost -> {
                 aiJob?.cancel()
@@ -293,15 +286,11 @@ class NoteEditorViewModel @Inject constructor(
         val newValue = TextFieldValue(newText, selection = TextRange(newText.length))
         pushUndo(current)
         _uiState.update {
-            it.copy(
-                content = newValue,
-                ghostText = "",
-                realTextLength = newValue.text.length,
-            )
+            it.copy(content = newValue, ghostText = "", realTextLength = newValue.text.length)
         }
     }
 
-    // ── Dismiss ghost and process keystroke ───────────────────────────────────
+    // ── Dismiss ghost + apply keystroke ───────────────────────────────────────
 
     private fun clearGhostAndProcess(value: TextFieldValue) {
         val current = _uiState.value.content
@@ -309,12 +298,7 @@ class NoteEditorViewModel @Inject constructor(
         redoStack.clear()
         val newValue = handleBulletContinuation(current, value)
         _uiState.update {
-            it.copy(
-                content = newValue,
-                ghostText = "",
-                realTextLength = newValue.text.length,
-                aiError = null,
-            )
+            it.copy(content = newValue, ghostText = "", realTextLength = newValue.text.length, aiError = null)
         }
         scheduleAiCompletion(newValue.text)
     }
@@ -330,27 +314,18 @@ class NoteEditorViewModel @Inject constructor(
 
         aiJob?.cancel()
         aiJob = viewModelScope.launch {
-            // Debounce — wait for typing to stop
             delay(Constants.AI_TRIGGER_DEBOUNCE_MS)
-
-            // Rate limit — respect 5 RPM free tier
             val now = System.currentTimeMillis()
             val elapsed = now - lastAiRequestAt
             if (elapsed < Constants.AI_MIN_REQUEST_INTERVAL_MS) {
-                val remaining = Constants.AI_MIN_REQUEST_INTERVAL_MS - elapsed
-                delay(remaining)
+                delay(Constants.AI_MIN_REQUEST_INTERVAL_MS - elapsed)
             }
-
             lastAiRequestAt = System.currentTimeMillis()
             _uiState.update { it.copy(isAiLoading = true, aiError = null) }
             getAiCompletion(text)
                 .onSuccess { suggestion ->
-                    val s = suggestion?.trim() ?: ""
                     _uiState.update {
-                        it.copy(
-                            ghostText = s,
-                            isAiLoading = false,
-                        )
+                        it.copy(ghostText = suggestion?.trim() ?: "", isAiLoading = false)
                     }
                 }
                 .onFailure { err ->
@@ -362,11 +337,10 @@ class NoteEditorViewModel @Inject constructor(
                         it.copy(
                             ghostText = "",
                             isAiLoading = false,
-                            // 429 → silent fail, network → show message
                             aiError = when {
                                 isRateLimit -> null
-                                isNetwork -> "İnternet bağlantısı gerekli"
-                                else -> null
+                                isNetwork   -> "İnternet bağlantısı gerekli"
+                                else        -> null
                             },
                         )
                     }
@@ -379,13 +353,12 @@ class NoteEditorViewModel @Inject constructor(
     private suspend fun save() {
         val state = _uiState.value
         if (state.isLoading || state.isDeleted) return
-
         val fullText = state.content.text.trim()
         if (fullText.isBlank()) return
 
         val lines = fullText.lines()
         val title = lines.firstOrNull()?.take(200) ?: ""
-        val body = lines.drop(1).joinToString("\n").trim()
+        val body  = lines.drop(1).joinToString("\n").trim()
 
         _uiState.update { it.copy(isSaving = true) }
 
@@ -409,12 +382,9 @@ class NoteEditorViewModel @Inject constructor(
 
     // ── Bullet auto-continue ──────────────────────────────────────────────────
 
-    private fun handleBulletContinuation(
-        previous: TextFieldValue,
-        next: TextFieldValue,
-    ): TextFieldValue {
+    private fun handleBulletContinuation(previous: TextFieldValue, next: TextFieldValue): TextFieldValue {
         val prev = previous.text
-        val new = next.text
+        val new  = next.text
         val cursor = next.selection.start
 
         if (new.length != prev.length + 1) return next
@@ -431,16 +401,14 @@ class NoteEditorViewModel @Inject constructor(
                 val inserted = new.substring(0, cursor) + "- " + new.substring(cursor)
                 TextFieldValue(inserted, selection = TextRange(cursor + 2))
             }
-        } else {
-            next
-        }
+        } else next
     }
 
-    // ── Inline format ─────────────────────────────────────────────────────────
+    // ── Inline format (wraps selection or inserts empty markers) ─────────────
 
     private fun applyInlineFormat(marker: String) {
         val current = _uiState.value.content
-        val sel = current.selection
+        val sel  = current.selection
         val text = current.text
 
         val newText: String
@@ -448,12 +416,10 @@ class NoteEditorViewModel @Inject constructor(
 
         if (sel.length > 0) {
             val selected = text.substring(sel.start, sel.end)
-            newText = text.substring(0, sel.start) + "$marker$selected$marker" +
-                    text.substring(sel.end)
+            newText   = text.substring(0, sel.start) + "$marker$selected$marker" + text.substring(sel.end)
             newCursor = sel.end + marker.length * 2
         } else {
-            newText = text.substring(0, sel.start) + "$marker$marker" +
-                    text.substring(sel.start)
+            newText   = text.substring(0, sel.start) + "$marker$marker" + text.substring(sel.start)
             newCursor = sel.start + marker.length
         }
 
@@ -468,32 +434,47 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    // ── Line prefix ───────────────────────────────────────────────────────────
+    // ── Line prefix (toggle: adds or removes) ─────────────────────────────────
 
     private fun applyLinePrefix(prefix: String) {
         val current = _uiState.value.content
-        val text = current.text
-        val cursor = current.selection.start
+        val text    = current.text
+        val cursor  = current.selection.start
 
         val lineStart = text.lastIndexOf('\n', cursor - 1) + 1
-        val already = text.startsWith(prefix, lineStart)
+
+        // If line already has this exact prefix, remove it
+        // If line has a DIFFERENT heading prefix, replace it
+        val existingHeadingRegex = Regex("""^#{1,3} """)
+        val existingMatch = existingHeadingRegex.find(text.substring(lineStart))
 
         val newText: String
         val newCursor: Int
 
-        if (already) {
-            newText = text.substring(0, lineStart) + text.substring(lineStart + prefix.length)
-            newCursor = (cursor - prefix.length).coerceAtLeast(lineStart)
-        } else {
-            newText = text.substring(0, lineStart) + prefix + text.substring(lineStart)
-            newCursor = cursor + prefix.length
+        when {
+            text.startsWith(prefix, lineStart) -> {
+                // Toggle off — same prefix already present
+                newText   = text.substring(0, lineStart) + text.substring(lineStart + prefix.length)
+                newCursor = (cursor - prefix.length).coerceAtLeast(lineStart)
+            }
+            existingMatch != null && prefix.matches(Regex("""#{1,3} """)) -> {
+                // Replace existing heading level with new one
+                val oldPrefix = existingMatch.value
+                newText   = text.substring(0, lineStart) + prefix + text.substring(lineStart + oldPrefix.length)
+                newCursor = cursor + (prefix.length - oldPrefix.length)
+            }
+            else -> {
+                // Add prefix
+                newText   = text.substring(0, lineStart) + prefix + text.substring(lineStart)
+                newCursor = cursor + prefix.length
+            }
         }
 
         pushUndo(current)
         skipNextUndoPush = true
         _uiState.update {
             it.copy(
-                content = TextFieldValue(newText, selection = TextRange(newCursor)),
+                content = TextFieldValue(newText, selection = TextRange(newCursor.coerceAtLeast(0))),
                 ghostText = "",
                 realTextLength = newText.length,
             )
