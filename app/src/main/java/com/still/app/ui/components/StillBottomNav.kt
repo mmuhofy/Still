@@ -11,13 +11,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -33,11 +33,9 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings
 import com.still.app.util.Constants
 
-// Pill palette — dark glass surface with gold-tinted active state
-private val PillBg       = Color(0xFF18181F)         // deep dark, slightly blue-tinted
-private val PillBorder   = Color(0x28FFFFFF)          // subtle white rim
-private val PillActive   = Color(0xFFB8A369)          // mat altın — Calm Luxury accent
-private val PillInactive = Color(0x66FFFFFF)          // muted white
+private val PillBg       = Color(0xFF18181F)
+private val PillActive   = Color(0xFFB8A369)
+private val PillInactive = Color(0x66FFFFFF)
 
 sealed class BottomNavTab(
     val route: String,
@@ -66,38 +64,39 @@ fun StillBottomNav(
     onTabSelected: (BottomNavTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Outer wrapper — sits above system nav area, centered horizontally
+    // fillMaxWidth ensures the Box spans full screen width so Alignment.Center
+    // places the pill at the horizontal center, not the left edge.
     Box(
         modifier = modifier
+            .fillMaxWidth()
             .navigationBarsPadding()
             .padding(bottom = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // Floating pill container
         Row(
             modifier = Modifier
                 .shadow(
-                    elevation = 24.dp,
+                    elevation = 32.dp,
                     shape = RoundedCornerShape(50),
-                    ambientColor = Color.Black.copy(alpha = 0.5f),
-                    spotColor = Color.Black.copy(alpha = 0.5f),
+                    ambientColor = Color.Black.copy(alpha = 0.6f),
+                    spotColor = Color.Black.copy(alpha = 0.6f),
                 )
                 .clip(RoundedCornerShape(50))
+                // Outer dark shell
                 .background(PillBg)
-                // Thin border via padding + inner clip — no extra composable needed
+                // 1dp border via inner padding + re-clip
                 .padding(1.dp)
                 .clip(RoundedCornerShape(50))
-                .background(PillBg.copy(alpha = 0.95f))
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .background(PillBg.copy(alpha = 0.96f))
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BottomNavTab.tabs.forEach { tab ->
-                val selected = currentRoute == tab.route
                 PillTabItem(
                     icon = tab.icon,
                     label = tab.label,
-                    selected = selected,
+                    selected = currentRoute == tab.route,
                     onClick = { onTabSelected(tab) },
                 )
             }
@@ -117,13 +116,13 @@ private fun PillTabItem(
         animationSpec = tween(Constants.ANIMATION_DURATION_MS),
         label = "pill_tint",
     )
-    val bgAlpha by animateColorAsState(
-        targetValue = if (selected) PillActive.copy(alpha = 0.15f) else Color.Transparent,
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) PillActive.copy(alpha = 0.18f) else Color.Transparent,
         animationSpec = tween(Constants.ANIMATION_DURATION_MS),
         label = "pill_bg",
     )
     val itemSize by animateDpAsState(
-        targetValue = if (selected) 52.dp else 48.dp,
+        targetValue = if (selected) 54.dp else 48.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "pill_size",
     )
@@ -132,10 +131,10 @@ private fun PillTabItem(
         modifier = Modifier
             .size(itemSize)
             .clip(CircleShape)
-            .background(bgAlpha)
+            .background(bgColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null, // no ripple — Calm Luxury
+                indication = null,
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,

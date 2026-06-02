@@ -270,10 +270,8 @@ private class MarkdownVisualTransformation : VisualTransformation {
 
 // ── Formatting Toolbar — Liquid Glass ────────────────────────────────────────
 
-// Liquid glass palette — slightly luminous tinted glass over the dark surface
-private val GlassBase    = Color(0xFF1E1E2A)
-private val GlassBorder  = Color(0x33FFFFFF)
-private val GlassSheen   = Color(0x0DFFFFFF)
+private val GlassBase   = Color(0xFF1E1E2A)
+private val GlassBorder = Color(0x33FFFFFF)
 
 @Composable
 private fun FormattingToolbar(
@@ -285,126 +283,75 @@ private fun FormattingToolbar(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
-    var headingExpanded by remember { mutableStateOf(false) }
+    var headingMenuExpanded by remember { mutableStateOf(false) }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .imePadding(),
+            .imePadding()
+            .background(
+                brush = Brush.verticalGradient(
+                    listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f)),
+                ),
+            ),
     ) {
-        // ── Heading picker — slides in above toolbar ───────────────────────
-        AnimatedVisibility(
-            visible = headingExpanded,
-            enter = expandVertically(tween(220)) + fadeIn(tween(220)),
-            exit  = shrinkVertically(tween(180)) + fadeOut(tween(180)),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(GlassBase.copy(alpha = 0.85f), GlassBase.copy(alpha = 0.95f)),
-                        ),
-                    )
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                listOf(1, 2, 3).forEach { level ->
-                    HeadingChip(
-                        label = "H$level",
-                        onClick = {
-                            onHeading(level)
-                            headingExpanded = false
-                        },
-                    )
-                }
-            }
-        }
-
-        // ── Thin glass border line ─────────────────────────────────────────
         HorizontalDivider(color = GlassBorder, thickness = 0.5.dp)
 
-        // ── Main toolbar row ───────────────────────────────────────────────
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // Blur layer — simulates frosted glass
-                .blur(0.dp), // real blur requires RenderEffect (API 31+); kept as extension point
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Glass background: dark base + subtle vertical sheen
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                GlassBase.copy(alpha = 0.92f),
-                                GlassBase.copy(alpha = 0.98f),
-                            ),
-                        ),
-                    ),
-            )
-            // Top sheen stripe
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .size(height = 1.dp, width = 0.dp) // hairline sheen
-                    .background(GlassSheen),
-            )
+            ToolbarButton(icon = Lucide.Bold,      label = "Kalın",       onClick = onBold)
+            ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
+            ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ToolbarButton(icon = Lucide.Bold,      label = "Kalın",       onClick = onBold)
-                ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
-                ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
-
-                // Heading button — toggles H1/H2/H3 picker
+            // Heading button — standard DropdownMenu with H1/H2/H3
+            Box {
                 IconButton(
-                    onClick = { headingExpanded = !headingExpanded },
+                    onClick = { headingMenuExpanded = true },
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
                         imageVector = Lucide.Heading2,
                         contentDescription = "Başlık",
-                        tint = if (headingExpanded)
+                        tint = if (headingMenuExpanded)
                             MaterialTheme.colorScheme.primary
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
                     )
                 }
-
-                ToolbarButton(icon = Lucide.List, label = "Liste", onClick = onBullet)
-
-                Spacer(Modifier.weight(1f))
-
-                ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
-                ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
-                Spacer(Modifier.width(4.dp))
+                DropdownMenu(
+                    expanded = headingMenuExpanded,
+                    onDismissRequest = { headingMenuExpanded = false },
+                ) {
+                    listOf(1, 2, 3).forEach { level ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "H$level",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            },
+                            onClick = {
+                                onHeading(level)
+                                headingMenuExpanded = false
+                            },
+                        )
+                    }
+                }
             }
-        }
-    }
-}
 
-@Composable
-private fun HeadingChip(label: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(GlassBorder)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+            ToolbarButton(icon = Lucide.List, label = "Liste", onClick = onBullet)
+
+            Spacer(Modifier.weight(1f))
+
+            ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
+            ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
+            Spacer(Modifier.width(4.dp))
+        }
     }
 }
 
