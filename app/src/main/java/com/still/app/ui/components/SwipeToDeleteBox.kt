@@ -36,17 +36,23 @@ fun SwipeToDeleteBox(
     content: @Composable () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
-        // FIX: confirmValueChange removed — let SwipeToDismissBox handle snap
-        // with its own positionalThreshold. When confirmValueChange always
-        // returns true the item snaps as soon as threshold is crossed even if
-        // the user is still dragging back, which caused premature deletion.
-        positionalThreshold = { totalDistance -> totalDistance * Constants.SWIPE_DELETE_THRESHOLD },
+        // confirmValueChange: return true ONLY when the user releases at or
+        // past the threshold. While the finger is still on screen this lambda
+        // is called with the *target* value — we check progress to decide
+        // whether to confirm the snap.
+        confirmValueChange = { value ->
+            // Allow snap only when drag has passed 75% of the item width.
+            // progress is 0→1 where 1 = fully dismissed.
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                dismissState.progress >= Constants.SWIPE_DELETE_THRESHOLD
+            } else {
+                false
+            }
+        },
     )
 
-    // FIX: Only fire onDeleted when the item has fully settled at EndToStart
-    // (currentValue), NOT on targetValue changes. targetValue tracks the
-    // intended destination while the finger is still on screen — reacting to
-    // it caused deletion even when the user dragged back before releasing.
+    // Fire onDeleted only after the item has fully settled (currentValue),
+    // never on targetValue — prevents firing when user drags back.
     LaunchedEffect(dismissState.currentValue) {
         if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
             onDeleted()
@@ -59,8 +65,6 @@ fun SwipeToDeleteBox(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true,
         backgroundContent = {
-            // Background turns red only when the item will actually be deleted
-            // (targetValue reached threshold), not during casual drags.
             val willDelete = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
             val bgColor by animateColorAsState(
                 targetValue = if (willDelete) DeleteRed else DeleteRedDim,
