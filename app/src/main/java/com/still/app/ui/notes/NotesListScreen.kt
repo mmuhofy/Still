@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,21 +44,15 @@ import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.List
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
-import com.still.app.domain.model.Note
 import com.still.app.ui.components.NoteCard
 import com.still.app.ui.components.NoteListItem
-import com.still.app.ui.components.StillDropdownMenu
-import com.still.app.ui.components.StillDropdownMenuItem
 import com.still.app.ui.components.StillSnackbar
 import com.still.app.ui.components.SwipeToDeleteBox
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesListScreen(
-    topPadding: Dp,
-    bottomPadding: Dp,
     onNoteClick: (Long) -> Unit,
-    onNewNote: () -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
     viewModel: NotesListViewModel = hiltViewModel(),
@@ -65,9 +60,10 @@ fun NotesListScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     var sortMenuExpanded by remember { mutableStateOf(false) }
-    var contextMenuNoteId by remember { mutableStateOf<Long?>(null) }
+    var contextMenuNote by remember { mutableStateOf<Long?>(null) }
 
-    val fabSpacing = 56.dp + 20.dp + bottomPadding
+    // Track innerPadding so the snackbar can reference it outside Scaffold lambda
+    var scaffoldBottomPadding by remember { mutableStateOf(0.dp) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -92,7 +88,6 @@ fun NotesListScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        // Sort menu
                         Box {
                             IconButton(onClick = { sortMenuExpanded = true }) {
                                 Icon(
@@ -101,38 +96,22 @@ fun NotesListScreen(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            StillDropdownMenu(
+                            SortDropdownMenu(
                                 expanded = sortMenuExpanded,
-                                onDismissRequest = { sortMenuExpanded = false },
-                            ) {
-                                listOf(
-                                    NoteSortOrder.LAST_MODIFIED to "Son düzenleme",
-                                    NoteSortOrder.CREATED       to "Oluşturma tarihi",
-                                    NoteSortOrder.TITLE         to "Başlık",
-                                ).forEach { (order, label) ->
-                                    StillDropdownMenuItem(
-                                        text = label,
-                                        color = if (state.sortOrder == order)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.onSurface,
-                                        onClick = {
-                                            viewModel.onEvent(NotesListEvent.SetSortOrder(order))
-                                            sortMenuExpanded = false
-                                        },
-                                    )
-                                }
-                            }
+                                currentOrder = state.sortOrder,
+                                onOrderSelected = {
+                                    viewModel.onEvent(NotesListEvent.SetSortOrder(it))
+                                    sortMenuExpanded = false
+                                },
+                                onDismiss = { sortMenuExpanded = false },
+                            )
                         }
-                        // View mode toggle
                         IconButton(onClick = {
-                            val next = if (state.viewMode == NoteViewMode.CARD)
-                                NoteViewMode.LIST else NoteViewMode.CARD
+                            val next = if (state.viewMode == NoteViewMode.CARD) NoteViewMode.LIST else NoteViewMode.CARD
                             viewModel.onEvent(NotesListEvent.SetViewMode(next))
                         }) {
                             Icon(
-                                imageVector = if (state.viewMode == NoteViewMode.CARD)
-                                    Lucide.List else Lucide.LayoutGrid,
+                                imageVector = if (state.viewMode == NoteViewMode.CARD) Lucide.List else Lucide.LayoutGrid,
                                 contentDescription = "Görünümü değiştir",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -146,6 +125,7 @@ fun NotesListScreen(
                 )
             },
         ) { innerPadding ->
+            scaffoldBottomPadding = innerPadding.calculateBottomPadding()
             if (state.isLoading) return@Scaffold
 
             val allEmpty = state.pinnedNotes.isEmpty() && state.unpinnedNotes.isEmpty()
@@ -158,15 +138,14 @@ fun NotesListScreen(
                 NotesList(
                     state = state,
                     topPadding = innerPadding.calculateTopPadding(),
-                    bottomPadding = fabSpacing,
+                    bottomPadding = innerPadding.calculateBottomPadding(),
                     onNoteClick = onNoteClick,
-                    onLongClick = { contextMenuNoteId = it },
+                    onLongClick = { contextMenuNote = it },
                     viewModel = viewModel,
                 )
             }
         }
 
-        // Undo snackbar
         StillSnackbar(
             visible = state.pendingDeleteNote != null,
             message = "Not silindi",
@@ -174,25 +153,24 @@ fun NotesListScreen(
             onDismiss = { viewModel.onEvent(NotesListEvent.ConfirmDelete) },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = fabSpacing + 8.dp),
+                .padding(bottom = scaffoldBottomPadding + 8.dp),
         )
     }
 
-    // Long-press context menu
-    if (contextMenuNoteId != null) {
+    if (contextMenuNote != null) {
         val note = (state.pinnedNotes + state.unpinnedNotes)
-            .firstOrNull { it.id == contextMenuNoteId }
+            .firstOrNull { it.id == contextMenuNote }
         if (note != null) {
             NoteContextMenu(
                 note = note,
-                onDismiss = { contextMenuNoteId = null },
+                onDismiss = { contextMenuNote = null },
                 onPin = {
                     viewModel.onEvent(NotesListEvent.TogglePin(note))
-                    contextMenuNoteId = null
+                    contextMenuNote = null
                 },
                 onDelete = {
                     viewModel.onEvent(NotesListEvent.DeleteNote(note))
-                    contextMenuNoteId = null
+                    contextMenuNote = null
                 },
             )
         }
@@ -204,8 +182,8 @@ fun NotesListScreen(
 @Composable
 private fun NotesList(
     state: NotesListUiState,
-    topPadding: Dp,
-    bottomPadding: Dp,
+    topPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: androidx.compose.ui.unit.Dp,
     onNoteClick: (Long) -> Unit,
     onLongClick: (Long) -> Unit,
     viewModel: NotesListViewModel,
@@ -216,7 +194,7 @@ private fun NotesList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 top = topPadding + 8.dp,
-                bottom = bottomPadding,
+                bottom = bottomPadding + 8.dp,
                 start = 12.dp,
                 end = 12.dp,
             ),
@@ -226,9 +204,7 @@ private fun NotesList(
             if (state.pinnedNotes.isNotEmpty()) {
                 item(span = { GridItemSpan(2) }) { SectionLabel("Sabitlenmiş") }
                 items(state.pinnedNotes, key = { it.id }) { note ->
-                    SwipeToDeleteBox(
-                        onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                    ) {
+                    SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
                         NoteCard(
                             note = note,
                             onClick = { onNoteClick(note.id) },
@@ -241,9 +217,7 @@ private fun NotesList(
                 }
             }
             items(state.unpinnedNotes, key = { it.id }) { note ->
-                SwipeToDeleteBox(
-                    onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                ) {
+                SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
                     NoteCard(
                         note = note,
                         onClick = { onNoteClick(note.id) },
@@ -257,7 +231,7 @@ private fun NotesList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 top = topPadding + 8.dp,
-                bottom = bottomPadding,
+                bottom = bottomPadding + 8.dp,
                 start = 16.dp,
                 end = 16.dp,
             ),
@@ -266,9 +240,7 @@ private fun NotesList(
             if (state.pinnedNotes.isNotEmpty()) {
                 item { SectionLabel("Sabitlenmiş") }
                 items(state.pinnedNotes, key = { it.id }) { note ->
-                    SwipeToDeleteBox(
-                        onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                    ) {
+                    SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
                         NoteListItem(
                             note = note,
                             onClick = { onNoteClick(note.id) },
@@ -282,9 +254,7 @@ private fun NotesList(
                 }
             }
             items(state.unpinnedNotes, key = { it.id }) { note ->
-                SwipeToDeleteBox(
-                    onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) },
-                ) {
+                SwipeToDeleteBox(onDeleted = { viewModel.onEvent(NotesListEvent.DeleteNote(note)) }) {
                     NoteListItem(
                         note = note,
                         onClick = { onNoteClick(note.id) },
@@ -305,10 +275,7 @@ private fun SectionLabel(text: String, topPadding: Boolean = false) {
         text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-        modifier = Modifier.padding(
-            top = if (topPadding) 12.dp else 4.dp,
-            bottom = 6.dp,
-        ),
+        modifier = Modifier.padding(top = if (topPadding) 12.dp else 4.dp, bottom = 6.dp),
     )
 }
 
@@ -334,27 +301,65 @@ private fun EmptyState(modifier: Modifier = Modifier) {
     }
 }
 
-// ── Context Menu (long-press) ─────────────────────────────────────────────────
+// ── Sort Dropdown ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun SortDropdownMenu(
+    expanded: Boolean,
+    currentOrder: NoteSortOrder,
+    onOrderSelected: (NoteSortOrder) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        listOf(
+            NoteSortOrder.LAST_MODIFIED to "Son düzenleme",
+            NoteSortOrder.CREATED       to "Oluşturma tarihi",
+            NoteSortOrder.TITLE         to "Başlık",
+        ).forEach { (order, label) ->
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = label,
+                        color = if (currentOrder == order)
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                onClick = { onOrderSelected(order) },
+            )
+        }
+    }
+}
+
+// ── Context Menu ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun NoteContextMenu(
-    note: Note,
+    note: com.still.app.domain.model.Note,
     onDismiss: () -> Unit,
     onPin: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Box {
-        StillDropdownMenu(
-            expanded = true,
-            onDismissRequest = onDismiss,
-        ) {
-            StillDropdownMenuItem(
-                text = if (note.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
+        DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (note.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
                 onClick = onPin,
             )
-            StillDropdownMenuItem(
-                text = "Sil",
-                color = MaterialTheme.colorScheme.error,
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        "Sil",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
                 onClick = onDelete,
             )
         }

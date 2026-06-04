@@ -1,27 +1,15 @@
 package com.still.app.ui.navigation
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -31,14 +19,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Plus
+import com.still.app.ui.components.BottomNavTab
 import com.still.app.ui.components.StillBottomNav
 import com.still.app.ui.editor.NoteEditorScreen
 import com.still.app.ui.notes.NotesListScreen
 import com.still.app.ui.onboarding.OnboardingScreen
-import com.still.app.ui.search.SearchScreen
-import com.still.app.ui.settings.SettingsScreen
 import com.still.app.util.Constants
 import kotlinx.coroutines.flow.first
 
@@ -52,6 +37,7 @@ object Routes {
 
     fun noteEditor(noteId: Long = -1L) = "note_editor/$noteId"
 
+    // Screens where bottom nav is visible
     val bottomNavRoutes = setOf(NOTES_LIST, SETTINGS)
 }
 
@@ -77,10 +63,8 @@ fun StillNavHost(
 
     val startDestination = if (onboardingCompleted == true) Routes.NOTES_LIST else Routes.ONBOARDING
     val showBottomNav = currentRoute in Routes.bottomNavRoutes
-    val showFab       = currentRoute == Routes.NOTES_LIST
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomNav) {
                 StillBottomNav(
@@ -92,84 +76,53 @@ fun StillNavHost(
                             restoreState = true
                         }
                     },
+                    // New note action lives here — always accessible from any bottom-nav screen
+                    onNewNote = { navController.navigate(Routes.noteEditor()) },
                 )
             }
         },
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            NavHost(
-                navController = navController,
-                startDestination = startDestination,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                composable(Routes.ONBOARDING) {
-                    OnboardingScreen(
-                        onComplete = {
-                            navController.navigate(Routes.NOTES_LIST) {
-                                popUpTo(Routes.ONBOARDING) { inclusive = true }
-                            }
-                        },
-                    )
-                }
-
-                composable(Routes.NOTES_LIST) {
-                    NotesListScreen(
-                        topPadding = innerPadding.calculateTopPadding(),
-                        bottomPadding = innerPadding.calculateBottomPadding(),
-                        onNoteClick = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
-                        onNewNote   = { navController.navigate(Routes.noteEditor()) },
-                        onSearchClick  = { navController.navigate(Routes.SEARCH) },
-                        onSettingsClick = { navController.navigate(Routes.SETTINGS) },
-                    )
-                }
-
-                composable(
-                    route = Routes.NOTE_EDITOR,
-                    arguments = listOf(
-                        navArgument(Routes.ARG_NOTE_ID) {
-                            type = NavType.LongType
-                            defaultValue = -1L
-                        },
-                    ),
-                ) {
-                    NoteEditorScreen(onBack = { navController.popBackStack() })
-                }
-
-                composable(Routes.SEARCH) {
-                    SearchScreen(
-                        onNoteClick = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-
-                composable(Routes.SETTINGS) {
-                    SettingsScreen(
-                        topPadding = innerPadding.calculateTopPadding(),
-                        bottomPadding = innerPadding.calculateBottomPadding(),
-                    )
-                }
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.padding(innerPadding),
+        ) {
+            composable(Routes.ONBOARDING) {
+                OnboardingScreen(
+                    onComplete = {
+                        navController.navigate(Routes.NOTES_LIST) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
+                    },
+                )
             }
 
-            // FAB floats above the pill nav bar
-            // pill = navigationBarsPadding + 16dp bottom + ~68dp height ≈ 84dp above inset
-            AnimatedVisibility(
-                visible = showFab,
-                enter = fadeIn() + scaleIn(),
-                exit  = fadeOut() + scaleOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 20.dp, bottom = 96.dp), // 96 = pill height(68) + gap(28)
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(Routes.noteEditor()) },
-                    icon = { Icon(imageVector = Lucide.Plus, contentDescription = null) },
-                    text = { Text(text = "Yeni Not", style = MaterialTheme.typography.labelLarge) },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                    shape = MaterialTheme.shapes.large,
+            composable(Routes.NOTES_LIST) {
+                NotesListScreen(
+                    onNoteClick  = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
+                    onSearchClick = { navController.navigate(Routes.SEARCH) },
+                    onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 )
+            }
+
+            composable(
+                route = Routes.NOTE_EDITOR,
+                arguments = listOf(
+                    navArgument(Routes.ARG_NOTE_ID) {
+                        type = NavType.LongType
+                        defaultValue = -1L
+                    },
+                ),
+            ) {
+                NoteEditorScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(Routes.SEARCH) {
+                // Placeholder — SearchScreen added in search step
+            }
+
+            composable(Routes.SETTINGS) {
+                // Placeholder — SettingsScreen added in settings step
             }
         }
     }
