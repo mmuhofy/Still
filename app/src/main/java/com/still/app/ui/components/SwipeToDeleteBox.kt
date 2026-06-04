@@ -16,6 +16,9 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,24 +38,23 @@ fun SwipeToDeleteBox(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    // Track progress outside dismissState so confirmValueChange can read it
+    // without a forward reference.
+    var currentProgress by remember { mutableFloatStateOf(0f) }
+
     val dismissState = rememberSwipeToDismissBoxState(
-        // confirmValueChange: return true ONLY when the user releases at or
-        // past the threshold. While the finger is still on screen this lambda
-        // is called with the *target* value — we check progress to decide
-        // whether to confirm the snap.
         confirmValueChange = { value ->
-            // Allow snap only when drag has passed 75% of the item width.
-            // progress is 0→1 where 1 = fully dismissed.
             if (value == SwipeToDismissBoxValue.EndToStart) {
-                dismissState.progress >= Constants.SWIPE_DELETE_THRESHOLD
+                currentProgress >= Constants.SWIPE_DELETE_THRESHOLD
             } else {
                 false
             }
         },
     )
 
-    // Fire onDeleted only after the item has fully settled (currentValue),
-    // never on targetValue — prevents firing when user drags back.
+    // Keep progress in sync so confirmValueChange always has the latest value
+    currentProgress = dismissState.progress
+
     LaunchedEffect(dismissState.currentValue) {
         if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
             onDeleted()
