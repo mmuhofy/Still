@@ -24,6 +24,8 @@ import com.still.app.ui.components.StillBottomNav
 import com.still.app.ui.editor.NoteEditorScreen
 import com.still.app.ui.notes.NotesListScreen
 import com.still.app.ui.onboarding.OnboardingScreen
+import com.still.app.ui.search.SearchScreen
+import com.still.app.ui.settings.SettingsScreen
 import com.still.app.util.Constants
 import kotlinx.coroutines.flow.first
 
@@ -76,7 +78,6 @@ fun StillNavHost(
                             restoreState = true
                         }
                     },
-                    // New note action lives here — always accessible from any bottom-nav screen
                     onNewNote = { navController.navigate(Routes.noteEditor()) },
                 )
             }
@@ -99,7 +100,7 @@ fun StillNavHost(
 
             composable(Routes.NOTES_LIST) {
                 NotesListScreen(
-                    onNoteClick  = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
+                    onNoteClick   = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
                     onSearchClick = { navController.navigate(Routes.SEARCH) },
                     onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 )
@@ -118,11 +119,14 @@ fun StillNavHost(
             }
 
             composable(Routes.SEARCH) {
-                // Placeholder — SearchScreen added in search step
+                SearchScreen(
+                    onNoteClick = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
+                    onBack = { navController.popBackStack() },
+                )
             }
 
             composable(Routes.SETTINGS) {
-                // Placeholder — SettingsScreen added in settings step
+                SettingsScreen()
             }
         }
     }
