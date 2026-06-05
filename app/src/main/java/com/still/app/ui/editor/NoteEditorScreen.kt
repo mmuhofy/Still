@@ -1,17 +1,21 @@
 package com.still.app.ui.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -19,10 +23,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,11 +66,18 @@ import com.composables.icons.lucide.Italic
 import com.composables.icons.lucide.List
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.Redo2
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Underline
 import com.composables.icons.lucide.Undo2
 import com.still.app.ui.components.StillDropdownMenu
 import com.still.app.ui.components.StillDropdownMenuItem
+
+private val SheetBg     = Color(0xFF16161F)
+private val SheetBorder = Color(0x1AFFFFFF)
+private val GlassBase   = Color(0xFF1E1E2A)
+private val GlassBorder = Color(0x33FFFFFF)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +86,8 @@ fun NoteEditorScreen(
     viewModel: NoteEditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var overflowExpanded by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartialExpansion = true)
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {
@@ -91,45 +105,20 @@ fun NoteEditorScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Lucide.ArrowLeft,
+                            imageVector        = Lucide.ArrowLeft,
                             contentDescription = "Geri",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 },
                 title = {},
                 actions = {
-                    IconButton(onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin) }) {
+                    IconButton(onClick = { showSheet = true }) {
                         Icon(
-                            imageVector = Lucide.Pin,
-                            contentDescription = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
-                            tint = if (state.isPinned)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            imageVector        = Lucide.EllipsisVertical,
+                            contentDescription = "Daha fazla",
+                            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                    Box {
-                        IconButton(onClick = { overflowExpanded = true }) {
-                            Icon(
-                                imageVector = Lucide.EllipsisVertical,
-                                contentDescription = "Daha fazla",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        StillDropdownMenu(
-                            expanded = overflowExpanded,
-                            onDismissRequest = { overflowExpanded = false },
-                        ) {
-                            StillDropdownMenuItem(
-                                text = "Sil",
-                                color = MaterialTheme.colorScheme.error,
-                                onClick = {
-                                    overflowExpanded = false
-                                    viewModel.onEvent(NoteEditorEvent.DeleteNote)
-                                },
-                            )
-                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -168,6 +157,89 @@ fun NoteEditorScreen(
             )
         }
     }
+
+    // ── Note options bottom sheet ─────────────────────────────────────────────
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest  = { showSheet = false },
+            sheetState        = sheetState,
+            containerColor    = SheetBg,
+            dragHandle        = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 12.dp, bottom = 8.dp)
+                        .size(width = 36.dp, height = 4.dp)
+                        .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
+                )
+            },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp),
+            ) {
+                // Pin / Unpin
+                SheetItem(
+                    icon  = if (state.isPinned) Lucide.PinOff else Lucide.Pin,
+                    label = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
+                    tint  = MaterialTheme.colorScheme.onSurface,
+                    onClick = {
+                        viewModel.onEvent(NoteEditorEvent.TogglePin)
+                        showSheet = false
+                    },
+                )
+
+                HorizontalDivider(
+                    modifier  = Modifier.padding(horizontal = 20.dp),
+                    color     = SheetBorder,
+                    thickness = 0.5.dp,
+                )
+
+                // Delete
+                SheetItem(
+                    icon    = Lucide.Trash2,
+                    label   = "Sil",
+                    tint    = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        showSheet = false
+                        viewModel.onEvent(NoteEditorEvent.DeleteNote)
+                    },
+                )
+            }
+        }
+    }
+}
+
+// ── Sheet Item ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SheetItem(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector        = icon,
+            contentDescription = label,
+            tint               = tint,
+            modifier           = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = tint,
+        )
+    }
 }
 
 // ── Text Field ────────────────────────────────────────────────────────────────
@@ -179,15 +251,13 @@ private fun NoteTextField(
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    // Stabilize the transformation instance — recreating it every recompose
-    // causes BasicTextField to reset selection after toolbar actions.
     val transformation = remember { MarkdownVisualTransformation() }
 
     BasicTextField(
-        value         = value,
-        onValueChange = onValueChange,
-        modifier      = modifier.focusRequester(focusRequester),
-        textStyle     = MaterialTheme.typography.bodyLarge.copy(
+        value                = value,
+        onValueChange        = onValueChange,
+        modifier             = modifier.focusRequester(focusRequester),
+        textStyle            = MaterialTheme.typography.bodyLarge.copy(
             color = MaterialTheme.colorScheme.onBackground,
         ),
         cursorBrush          = SolidColor(MaterialTheme.colorScheme.primary),
@@ -208,9 +278,6 @@ private fun NoteTextField(
 }
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
-//
-// Segment-based marker-hidden renderer.
-// rawText == storage. Markers stripped from display, OffsetMapping is 1:1 stable.
 
 private class MarkdownVisualTransformation : VisualTransformation {
 
@@ -277,7 +344,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
             val lineStart = rawCursor
 
             if (lineIndex == 0) {
-                // Title line — SemiBold 24sp, no markdown parsing
                 if (line.isNotEmpty()) {
                     result += Segment.Visible(
                         rawStart = lineStart,
@@ -385,9 +451,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
 
 // ── Formatting Toolbar — Liquid Glass ────────────────────────────────────────
 
-private val GlassBase   = Color(0xFF1E1E2A)
-private val GlassBorder = Color(0x33FFFFFF)
-
 @Composable
 private fun FormattingToolbar(
     onBold: () -> Unit,
@@ -413,7 +476,7 @@ private fun FormattingToolbar(
         HorizontalDivider(color = GlassBorder, thickness = 0.5.dp)
 
         Row(
-            modifier = Modifier
+            modifier          = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

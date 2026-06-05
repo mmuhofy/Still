@@ -4,131 +4,154 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import com.still.app.R
 
-// Calm Luxury typography:
-// - Titles: serif-weight feel via heavy FontWeight on default serif family
-// - Body: clean, readable, generous line height
-// - Caption: muted, small
-//
-// Note: Custom font files (e.g. Lora, Playfair) can be dropped into
-// res/font/ and wired here in Phase 2 font selection feature.
-// For Phase 1 we use system serif for titles and system sans-serif for body.
+// Google Fonts provider
+private val provider = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage   = "com.google.android.gms",
+    certificates      = R.array.com_google_android_gms_fonts_certs,
+)
+
+// Inter — clean, neutral, designed for screens. Not tied to system font weight.
+private val InterFont = GoogleFont("Inter")
+
+val InterFamily = FontFamily(
+    Font(googleFont = InterFont, fontProvider = provider, weight = FontWeight.Light),
+    Font(googleFont = InterFont, fontProvider = provider, weight = FontWeight.Normal),
+    Font(googleFont = InterFont, fontProvider = provider, weight = FontWeight.Medium),
+    Font(googleFont = InterFont, fontProvider = provider, weight = FontWeight.SemiBold),
+    Font(googleFont = InterFont, fontProvider = provider, weight = FontWeight.Bold),
+)
+
+// Lora — serif, calm, luxury feel for titles
+private val LoraFont = GoogleFont("Lora")
+
+val LoraFamily = FontFamily(
+    Font(googleFont = LoraFont, fontProvider = provider, weight = FontWeight.Normal),
+    Font(googleFont = LoraFont, fontProvider = provider, weight = FontWeight.Medium),
+    Font(googleFont = LoraFont, fontProvider = provider, weight = FontWeight.SemiBold),
+    Font(googleFont = LoraFont, fontProvider = provider, weight = FontWeight.Bold),
+)
 
 val StillTypography = Typography(
 
     // ── Display ────────────────────────────────────────────────────────────────
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
+        fontFamily   = LoraFamily,
+        fontWeight   = FontWeight.Normal,
+        fontSize     = 57.sp,
+        lineHeight   = 64.sp,
         letterSpacing = (-0.25).sp,
     ),
     displayMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 45.sp,
-        lineHeight = 52.sp,
+        fontFamily   = LoraFamily,
+        fontWeight   = FontWeight.Normal,
+        fontSize     = 45.sp,
+        lineHeight   = 52.sp,
         letterSpacing = 0.sp,
     ),
     displaySmall = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
+        fontFamily   = LoraFamily,
+        fontWeight   = FontWeight.Normal,
+        fontSize     = 36.sp,
+        lineHeight   = 44.sp,
         letterSpacing = 0.sp,
     ),
 
     // ── Headline — note titles ─────────────────────────────────────────────────
     headlineLarge = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
+        fontFamily   = LoraFamily,
+        fontWeight   = FontWeight.SemiBold,
+        fontSize     = 32.sp,
+        lineHeight   = 40.sp,
         letterSpacing = 0.sp,
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
+        fontFamily   = LoraFamily,
+        fontWeight   = FontWeight.SemiBold,
+        fontSize     = 28.sp,
+        lineHeight   = 36.sp,
         letterSpacing = 0.sp,
     ),
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 24.sp,
-        lineHeight = 32.sp,
+        fontFamily   = LoraFamily,
+        fontWeight   = FontWeight.Medium,
+        fontSize     = 24.sp,
+        lineHeight   = 32.sp,
         letterSpacing = 0.sp,
     ),
 
-    // ── Title — card titles, section headers ───────────────────────────────────
+    // ── Title ─────────────────────────────────────────────────────────────────
     titleLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.SemiBold,
+        fontSize     = 22.sp,
+        lineHeight   = 28.sp,
         letterSpacing = 0.sp,
     ),
     titleMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Medium,
+        fontSize     = 16.sp,
+        lineHeight   = 24.sp,
         letterSpacing = 0.15.sp,
     ),
     titleSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Medium,
+        fontSize     = 14.sp,
+        lineHeight   = 20.sp,
         letterSpacing = 0.1.sp,
     ),
 
-    // ── Body — note content, previews ─────────────────────────────────────────
+    // ── Body — editor content, previews ───────────────────────────────────────
+    // Inter Light/Normal — soft, readable, never system-font-weight dependent
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 26.sp,  // generous — calm reading experience
-        letterSpacing = 0.5.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Light,   // lighter than system default — easier on eyes
+        fontSize     = 16.sp,
+        lineHeight   = 27.sp,
+        letterSpacing = 0.3.sp,
     ),
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.25.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Normal,
+        fontSize     = 14.sp,
+        lineHeight   = 22.sp,
+        letterSpacing = 0.2.sp,
     ),
     bodySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.4.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Normal,
+        fontSize     = 12.sp,
+        lineHeight   = 18.sp,
+        letterSpacing = 0.3.sp,
     ),
 
-    // ── Label — dates, badges, toolbar items ──────────────────────────────────
+    // ── Label ─────────────────────────────────────────────────────────────────
     labelLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Medium,
+        fontSize     = 14.sp,
+        lineHeight   = 20.sp,
         letterSpacing = 0.1.sp,
     ),
     labelMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Medium,
+        fontSize     = 12.sp,
+        lineHeight   = 16.sp,
         letterSpacing = 0.5.sp,
     ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
+        fontFamily   = InterFamily,
+        fontWeight   = FontWeight.Medium,
+        fontSize     = 11.sp,
+        lineHeight   = 16.sp,
         letterSpacing = 0.5.sp,
     ),
 )
