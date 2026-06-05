@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -160,10 +159,10 @@ fun NoteEditorScreen(
                 .imePadding(),
         ) {
             NoteTextField(
-                value = state.content,
-                onValueChange = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
+                value          = state.content,
+                onValueChange  = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
                 focusRequester = focusRequester,
-                modifier = Modifier
+                modifier       = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
             )
@@ -180,20 +179,24 @@ private fun NoteTextField(
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
+    // Stabilize the transformation instance — recreating it every recompose
+    // causes BasicTextField to reset selection after toolbar actions.
+    val transformation = remember { MarkdownVisualTransformation() }
+
     BasicTextField(
-        value = value,
+        value         = value,
         onValueChange = onValueChange,
-        modifier = modifier.focusRequester(focusRequester),
-        textStyle = MaterialTheme.typography.bodyLarge.copy(
+        modifier      = modifier.focusRequester(focusRequester),
+        textStyle     = MaterialTheme.typography.bodyLarge.copy(
             color = MaterialTheme.colorScheme.onBackground,
         ),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        visualTransformation = remember { MarkdownVisualTransformation() },
+        cursorBrush          = SolidColor(MaterialTheme.colorScheme.primary),
+        visualTransformation = transformation,
         decorationBox = { innerTextField ->
             Box {
                 if (value.text.isEmpty()) {
                     Text(
-                        text = "Yazmaya başla...",
+                        text  = "Yazmaya başla...",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                     )
@@ -206,8 +209,8 @@ private fun NoteTextField(
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
 //
-// Hides markdown markers (**, __, _, #, - ) and applies styles to inner text.
-// Custom OffsetMapping keeps cursor at correct raw position at all times.
+// Segment-based marker-hidden renderer.
+// rawText == storage. Markers stripped from display, OffsetMapping is 1:1 stable.
 
 private class MarkdownVisualTransformation : VisualTransformation {
 
@@ -274,7 +277,7 @@ private class MarkdownVisualTransformation : VisualTransformation {
             val lineStart = rawCursor
 
             if (lineIndex == 0) {
-                // Title line — no markdown parsing, always SemiBold 24sp
+                // Title line — SemiBold 24sp, no markdown parsing
                 if (line.isNotEmpty()) {
                     result += Segment.Visible(
                         rawStart = lineStart,
@@ -297,7 +300,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
                             2    -> TextUnit(20f, TextUnitType.Sp)
                             else -> TextUnit(18f, TextUnitType.Sp)
                         }
-                        // Hide "# " prefix
                         result += Segment.Hidden(lineStart, lineStart + prefixLen)
                         if (prefixLen < line.length) {
                             result += Segment.Visible(
@@ -308,7 +310,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
                         }
                     }
                     isBullet -> {
-                        // Hide "- " and parse inline markdown in the rest
                         result += Segment.Hidden(lineStart, lineStart + 2)
                         parseInline(raw, lineStart + 2, lineStart + line.length, result)
                     }
@@ -317,7 +318,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
             }
 
             rawCursor += line.length
-            // Newline character — always visible, no style
             if (rawCursor < raw.length) {
                 result += Segment.Visible(rawStart = rawCursor, rawEnd = rawCursor + 1)
                 rawCursor += 1
@@ -424,13 +424,13 @@ private fun FormattingToolbar(
 
             Box {
                 IconButton(
-                    onClick = { headingMenuExpanded = true },
+                    onClick  = { headingMenuExpanded = true },
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
-                        imageVector = Lucide.Heading2,
+                        imageVector        = Lucide.Heading2,
                         contentDescription = "Başlık",
-                        tint = if (headingMenuExpanded)
+                        tint               = if (headingMenuExpanded)
                             MaterialTheme.colorScheme.primary
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant,
@@ -438,12 +438,12 @@ private fun FormattingToolbar(
                     )
                 }
                 StillDropdownMenu(
-                    expanded = headingMenuExpanded,
+                    expanded         = headingMenuExpanded,
                     onDismissRequest = { headingMenuExpanded = false },
                 ) {
                     listOf("H1" to 1, "H2" to 2, "H3" to 3).forEach { (label, level) ->
                         StillDropdownMenuItem(
-                            text = label,
+                            text    = label,
                             onClick = {
                                 onHeading(level)
                                 headingMenuExpanded = false
@@ -453,12 +453,10 @@ private fun FormattingToolbar(
                 }
             }
 
-            ToolbarButton(icon = Lucide.List,  label = "Liste",    onClick = onBullet)
-
+            ToolbarButton(icon = Lucide.List,  label = "Liste",   onClick = onBullet)
             Spacer(Modifier.weight(1f))
-
-            ToolbarButton(icon = Lucide.Undo2, label = "Geri al",  onClick = onUndo)
-            ToolbarButton(icon = Lucide.Redo2, label = "Yinele",   onClick = onRedo)
+            ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
+            ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
             Spacer(Modifier.width(4.dp))
         }
     }
@@ -468,10 +466,10 @@ private fun FormattingToolbar(
 private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(
-            imageVector = icon,
+            imageVector        = icon,
             contentDescription = label,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier           = Modifier.size(20.dp),
         )
     }
 }
