@@ -114,10 +114,10 @@
 
 ## Phase 2 — Experience
 
-- 🟡 AI inline completion (Gemini API integration — `gemini-3.1-flash-lite`)
-- 🟡 Ghost text rendering in editor
-- 🟡 Accept on tap, variants on long-press
-- 🟡 No-internet graceful degradation for AI
+- 🔴 AI inline completion (Gemini API integration — `gemini-3.1-flash-lite`)
+- 🔴 Ghost text rendering in editor
+- 🔴 Accept on tap, variants on long-press
+- 🔴 No-internet graceful degradation for AI
 - 🔴 Focus mode (hide all chrome, only text)
 - 🔴 Typewriter mode (active line centered vertically)
 - 🔴 Writing statistics screen (words today, streak, best session)
