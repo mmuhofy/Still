@@ -87,7 +87,7 @@ fun NoteEditorScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartialExpansion = true)
+    val sheetState = rememberModalBottomSheetState()
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {

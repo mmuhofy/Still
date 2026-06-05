@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,11 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
+}
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
 }
 
 android {
@@ -19,6 +26,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProps.getProperty("gemini.api.key", "")}\""
+        )
     }
 
     room {
@@ -61,49 +74,38 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
-    // Compose core
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-    implementation(libs.compose.material.icons.extended)
-    implementation(libs.compose.ui.google.fonts)   // Google Fonts — Inter for editor body
+    implementation(libs.compose.ui.google.fonts)   // Inter + Lora
     implementation(libs.activity.compose)
 
-    // Lifecycle
+    // Lucide icons
+    implementation(libs.lucide.icons)
+
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
 
-    // Navigation
     implementation(libs.navigation.compose)
 
-    // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // DataStore
     implementation(libs.datastore.preferences)
 
-    // AppCompat
     implementation(libs.appcompat)
 
-    // Coroutines
     implementation(libs.coroutines.android)
 
-    // Icons — Lucide
-    implementation(libs.lucide.icons)
-
-    // Debug
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
-    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.espresso.core)
