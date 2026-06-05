@@ -2,7 +2,6 @@ package com.still.app.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -19,7 +18,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.still.app.ui.components.BottomNavTab
 import com.still.app.ui.components.StillBottomNav
 import com.still.app.ui.editor.NoteEditorScreen
 import com.still.app.ui.notes.NotesListScreen
@@ -39,7 +37,6 @@ object Routes {
 
     fun noteEditor(noteId: Long = -1L) = "note_editor/$noteId"
 
-    // Screens where bottom nav is visible
     val bottomNavRoutes = setOf(NOTES_LIST, SETTINGS)
 }
 
@@ -82,11 +79,12 @@ fun StillNavHost(
                 )
             }
         },
-    ) { innerPadding ->
+    ) { _ ->
+        // Each screen manages its own innerPadding via its own Scaffold.
+        // Do NOT pass innerPadding here — it would double-apply the bottom nav height.
         NavHost(
             navController = navController,
             startDestination = startDestination,
-            modifier = Modifier.padding(innerPadding),
         ) {
             composable(Routes.ONBOARDING) {
                 OnboardingScreen(
@@ -100,8 +98,8 @@ fun StillNavHost(
 
             composable(Routes.NOTES_LIST) {
                 NotesListScreen(
-                    onNoteClick   = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
-                    onSearchClick = { navController.navigate(Routes.SEARCH) },
+                    onNoteClick     = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
+                    onSearchClick   = { navController.navigate(Routes.SEARCH) },
                     onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 )
             }
@@ -121,7 +119,7 @@ fun StillNavHost(
             composable(Routes.SEARCH) {
                 SearchScreen(
                     onNoteClick = { noteId -> navController.navigate(Routes.noteEditor(noteId)) },
-                    onBack = { navController.popBackStack() },
+                    onBack      = { navController.popBackStack() },
                 )
             }
 
