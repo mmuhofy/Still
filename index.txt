@@ -63,6 +63,7 @@ https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/mipmap-xxh
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/values/colors.xml
+https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/values/font_certs.xml
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/values/strings.xml
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/values/themes.xml
 https://raw.githubusercontent.com/mmuhofy/Still/main/app/src/main/res/xml/backup_rules.xml
