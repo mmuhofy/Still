@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -134,13 +135,15 @@ fun NoteEditorScreen(
         },
         bottomBar = {
             FormattingToolbar(
-                onBold      = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
-                onItalic    = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
-                onUnderline = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
-                onHeading   = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
-                onBullet    = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
-                onUndo      = { viewModel.onEvent(NoteEditorEvent.Undo) },
-                onRedo      = { viewModel.onEvent(NoteEditorEvent.Redo) },
+                onBold        = { viewModel.onEvent(NoteEditorEvent.ApplyBold) },
+                onItalic      = { viewModel.onEvent(NoteEditorEvent.ApplyItalic) },
+                onUnderline   = { viewModel.onEvent(NoteEditorEvent.ApplyUnderline) },
+                onHeading     = { level -> viewModel.onEvent(NoteEditorEvent.ApplyHeading(level)) },
+                onBullet      = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
+                onUndo        = { viewModel.onEvent(NoteEditorEvent.Undo) },
+                onRedo        = { viewModel.onEvent(NoteEditorEvent.Redo) },
+                showAccept    = state.ghostText.isNotBlank(),
+                onAcceptGhost = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
             )
         },
     ) { innerPadding ->
@@ -533,6 +536,8 @@ private fun FormattingToolbar(
     onBullet: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
+    showAccept: Boolean = false,
+    onAcceptGhost: () -> Unit = {},
 ) {
     var headingMenuExpanded by remember { mutableStateOf(false) }
 
@@ -564,9 +569,46 @@ private fun FormattingToolbar(
             }
             ToolbarButton(Lucide.List,  "Liste",   onBullet)
             Spacer(Modifier.weight(1f))
+            if (showAccept) {
+                AcceptButton(onClick = onAcceptGhost)
+            }
             ToolbarButton(Lucide.Undo2, "Geri al", onUndo)
             ToolbarButton(Lucide.Redo2, "Yinele",  onRedo)
             Spacer(Modifier.width(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun AcceptButton(onClick: () -> Unit) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = true,
+        enter   = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) +
+                  androidx.compose.animation.expandHorizontally(androidx.compose.animation.core.tween(180)),
+        exit    = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) +
+                  androidx.compose.animation.shrinkHorizontally(androidx.compose.animation.core.tween(120)),
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(end = 6.dp)
+                .height(32.dp)
+                .clip(CircleShape)
+                .background(Brush.horizontalGradient(listOf(Color(0xFFD4B97A), Gold)))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication        = null,
+                    onClick           = onClick,
+                )
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text  = "Onayla",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color      = Color(0xFF1A1208),
+                ),
+            )
         }
     }
 }
