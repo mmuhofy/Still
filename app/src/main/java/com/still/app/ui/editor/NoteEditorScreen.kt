@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +79,7 @@ private val SheetBg     = Color(0xFF16161F)
 private val SheetBorder = Color(0x1AFFFFFF)
 private val GlassBase   = Color(0xFF1E1E2A)
 private val GlassBorder = Color(0x33FFFFFF)
+private val Gold        = Color(0xFFB8A369)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,15 +90,22 @@ fun NoteEditorScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
-    val focusRequester = remember { FocusRequester() }
+    val titleFocusRequester = remember { FocusRequester() }
+    val bodyFocusRequester  = remember { FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
     }
 
     LaunchedEffect(Unit) {
-        if (state.noteId == -1L) focusRequester.requestFocus()
+        if (state.noteId == -1L) titleFocusRequester.requestFocus()
     }
+
+    // Split raw text into title (first line) and body (rest)
+    val rawText   = state.content.text
+    val newlineIdx = rawText.indexOf('\n')
+    val titleText  = if (newlineIdx == -1) rawText else rawText.substring(0, newlineIdx)
+    val bodyText   = if (newlineIdx == -1) "" else rawText.substring(newlineIdx + 1)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -147,24 +156,142 @@ fun NoteEditorScreen(
                 .verticalScroll(rememberScrollState())
                 .imePadding(),
         ) {
-            NoteTextField(
-                value          = state.content,
-                onValueChange  = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
-                focusRequester = focusRequester,
-                modifier       = Modifier
+            // ── Title field ───────────────────────────────────────────────────
+            BasicTextField(
+                value         = TextFieldValue(
+                    text      = titleText,
+                    selection = state.content.selection.let { sel ->
+                        // Clamp selection to title range
+                        TextRange(
+                            sel.start.coerceIn(0, titleText.length),
+                            sel.end.coerceIn(0, titleText.length),
+                        )
+                    },
+                ),
+                onValueChange = { tfv ->
+                    // Merge title change back into full raw text
+                    val newRaw = if (bodyText.isEmpty()) tfv.text else "${tfv.text}\n$bodyText"
+                    viewModel.onEvent(
+                        NoteEditorEvent.ContentChanged(
+                            TextFieldValue(
+                                text      = newRaw,
+                                selection = TextRange(tfv.selection.start, tfv.selection.end),
+                            )
+                        )
+                    )
+                },
+                modifier      = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 16.dp)
+                    .focusRequester(titleFocusRequester),
+                textStyle     = MaterialTheme.typography.headlineSmall.copy(
+                    color      = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                cursorBrush   = SolidColor(Gold),
+                singleLine    = false,
+                decorationBox = { inner ->
+                    Box {
+                        if (titleText.isEmpty()) {
+                            Text(
+                                text  = "Başlık",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── Gold gradient divider ─────────────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                Gold.copy(alpha = 0.6f),
+                                Gold.copy(alpha = 0.15f),
+                                Color.Transparent,
+                            )
+                        )
+                    )
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            // ── Body field ────────────────────────────────────────────────────
+            val bodyTfv = TextFieldValue(
+                text      = bodyText,
+                selection = state.content.selection.let { sel ->
+                    val offset = if (newlineIdx == -1) 0 else newlineIdx + 1
+                    val start  = (sel.start - offset).coerceIn(0, bodyText.length)
+                    val end    = (sel.end   - offset).coerceIn(0, bodyText.length)
+                    TextRange(start, end)
+                },
+            )
+            val bodyTransformation = remember { MarkdownVisualTransformation() }
+
+            BasicTextField(
+                value         = bodyTfv,
+                onValueChange = { tfv ->
+                    // Merge body change back into full raw text
+                    val newRaw = if (tfv.text.isEmpty() && titleText.isEmpty()) ""
+                                 else "$titleText\n${tfv.text}"
+                    val offset = if (newlineIdx == -1) 0 else newlineIdx + 1
+                    viewModel.onEvent(
+                        NoteEditorEvent.ContentChanged(
+                            TextFieldValue(
+                                text      = newRaw,
+                                selection = TextRange(
+                                    (tfv.selection.start + offset).coerceAtMost(newRaw.length),
+                                    (tfv.selection.end   + offset).coerceAtMost(newRaw.length),
+                                ),
+                            )
+                        )
+                    )
+                },
+                modifier      = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 80.dp)
+                    .focusRequester(bodyFocusRequester),
+                textStyle     = MaterialTheme.typography.bodyLarge.copy(
+                    color = MaterialTheme.colorScheme.onBackground,
+                ),
+                cursorBrush          = SolidColor(Gold),
+                visualTransformation = bodyTransformation,
+                decorationBox = { inner ->
+                    Box {
+                        if (bodyText.isEmpty()) {
+                            Text(
+                                text  = "Yazmaya başla...",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            )
+                        }
+                        inner()
+                    }
+                },
             )
         }
     }
 
-    // ── Note options bottom sheet ─────────────────────────────────────────────
+    // ── Bottom sheet ──────────────────────────────────────────────────────────
     if (showSheet) {
         ModalBottomSheet(
-            onDismissRequest  = { showSheet = false },
-            sheetState        = sheetState,
-            containerColor    = SheetBg,
-            dragHandle        = {
+            onDismissRequest = { showSheet = false },
+            sheetState       = sheetState,
+            containerColor   = SheetBg,
+            dragHandle = {
                 Box(
                     modifier = Modifier
                         .padding(top = 12.dp, bottom = 8.dp)
@@ -179,24 +306,20 @@ fun NoteEditorScreen(
                     .navigationBarsPadding()
                     .padding(bottom = 16.dp),
             ) {
-                // Pin / Unpin
                 SheetItem(
-                    icon  = if (state.isPinned) Lucide.PinOff else Lucide.Pin,
-                    label = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
-                    tint  = MaterialTheme.colorScheme.onSurface,
+                    icon    = if (state.isPinned) Lucide.PinOff else Lucide.Pin,
+                    label   = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
+                    tint    = MaterialTheme.colorScheme.onSurface,
                     onClick = {
                         viewModel.onEvent(NoteEditorEvent.TogglePin)
                         showSheet = false
                     },
                 )
-
                 HorizontalDivider(
                     modifier  = Modifier.padding(horizontal = 20.dp),
                     color     = SheetBorder,
                     thickness = 0.5.dp,
                 )
-
-                // Delete
                 SheetItem(
                     icon    = Lucide.Trash2,
                     label   = "Sil",
@@ -227,54 +350,10 @@ private fun SheetItem(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector        = icon,
-            contentDescription = label,
-            tint               = tint,
-            modifier           = Modifier.size(20.dp),
-        )
+        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(16.dp))
-        Text(
-            text  = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = tint,
-        )
+        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tint)
     }
-}
-
-// ── Text Field ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun NoteTextField(
-    value: TextFieldValue,
-    onValueChange: (TextFieldValue) -> Unit,
-    focusRequester: FocusRequester,
-    modifier: Modifier = Modifier,
-) {
-    val transformation = remember { MarkdownVisualTransformation() }
-
-    BasicTextField(
-        value                = value,
-        onValueChange        = onValueChange,
-        modifier             = modifier.focusRequester(focusRequester),
-        textStyle            = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onBackground,
-        ),
-        cursorBrush          = SolidColor(MaterialTheme.colorScheme.primary),
-        visualTransformation = transformation,
-        decorationBox = { innerTextField ->
-            Box {
-                if (value.text.isEmpty()) {
-                    Text(
-                        text  = "Yazmaya başla...",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    )
-                }
-                innerTextField()
-            }
-        },
-    )
 }
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
@@ -336,51 +415,33 @@ private class MarkdownVisualTransformation : VisualTransformation {
     }
 
     private fun buildSegments(raw: String): List<Segment> {
-        val result = mutableListOf<Segment>()
-        val lines = raw.lines()
+        val result    = mutableListOf<Segment>()
+        val lines     = raw.lines()
         var rawCursor = 0
 
-        lines.forEachIndexed { lineIndex, line ->
-            val lineStart = rawCursor
+        lines.forEachIndexed { _, line ->
+            val lineStart    = rawCursor
+            val headingMatch = Regex("""^(#{1,3}) """).find(line)
+            val isBullet     = line.startsWith("- ")
 
-            if (lineIndex == 0) {
-                if (line.isNotEmpty()) {
-                    result += Segment.Visible(
-                        rawStart = lineStart,
-                        rawEnd   = lineStart + line.length,
-                        style    = SpanStyle(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize   = TextUnit(24f, TextUnitType.Sp),
-                        ),
-                    )
-                }
-            } else {
-                val headingMatch = Regex("""^(#{1,3}) """).find(line)
-                val isBullet     = line.startsWith("- ")
-
-                when {
-                    headingMatch != null -> {
-                        val prefixLen = headingMatch.value.length
-                        val fs = when (headingMatch.groupValues[1].length) {
-                            1    -> TextUnit(22f, TextUnitType.Sp)
-                            2    -> TextUnit(20f, TextUnitType.Sp)
-                            else -> TextUnit(18f, TextUnitType.Sp)
-                        }
-                        result += Segment.Hidden(lineStart, lineStart + prefixLen)
-                        if (prefixLen < line.length) {
-                            result += Segment.Visible(
-                                rawStart = lineStart + prefixLen,
-                                rawEnd   = lineStart + line.length,
-                                style    = SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs),
-                            )
-                        }
+            when {
+                headingMatch != null -> {
+                    val prefixLen = headingMatch.value.length
+                    val fs = when (headingMatch.groupValues[1].length) {
+                        1    -> TextUnit(22f, TextUnitType.Sp)
+                        2    -> TextUnit(20f, TextUnitType.Sp)
+                        else -> TextUnit(18f, TextUnitType.Sp)
                     }
-                    isBullet -> {
-                        result += Segment.Hidden(lineStart, lineStart + 2)
-                        parseInline(raw, lineStart + 2, lineStart + line.length, result)
-                    }
-                    else -> parseInline(raw, lineStart, lineStart + line.length, result)
+                    result += Segment.Hidden(lineStart, lineStart + prefixLen)
+                    if (prefixLen < line.length)
+                        result += Segment.Visible(lineStart + prefixLen, lineStart + line.length,
+                            SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs))
                 }
+                isBullet -> {
+                    result += Segment.Hidden(lineStart, lineStart + 2)
+                    parseInline(raw, lineStart + 2, lineStart + line.length, result)
+                }
+                else -> parseInline(raw, lineStart, lineStart + line.length, result)
             }
 
             rawCursor += line.length
@@ -389,7 +450,6 @@ private class MarkdownVisualTransformation : VisualTransformation {
                 rawCursor += 1
             }
         }
-
         return result
     }
 
@@ -397,59 +457,40 @@ private class MarkdownVisualTransformation : VisualTransformation {
     private val boldRe      = Regex("""\*\*(.*?)\*\*""")
     private val italicRe    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
 
-    private fun parseInline(
-        raw: String,
-        regionStart: Int,
-        regionEnd: Int,
-        out: MutableList<Segment>,
-    ) {
+    private fun parseInline(raw: String, regionStart: Int, regionEnd: Int, out: MutableList<Segment>) {
         if (regionStart >= regionEnd) return
         val slice = raw.substring(regionStart, regionEnd)
-
-        data class Span(
-            val start: Int, val end: Int,
-            val innerStart: Int, val innerEnd: Int,
-            val style: SpanStyle,
-        )
-
+        data class Span(val start: Int, val end: Int, val innerStart: Int, val innerEnd: Int, val style: SpanStyle)
         val spans = mutableListOf<Span>()
-
         underlineRe.findAll(slice).forEach { m ->
-            spans += Span(m.range.first, m.range.last + 1,
-                m.range.first + 2, m.range.last - 1,
+            spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1,
                 SpanStyle(textDecoration = TextDecoration.Underline))
         }
         boldRe.findAll(slice).forEach { m ->
             if (spans.none { s -> m.range.first in s.start until s.end })
-                spans += Span(m.range.first, m.range.last + 1,
-                    m.range.first + 2, m.range.last - 1,
+                spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1,
                     SpanStyle(fontWeight = FontWeight.Bold))
         }
         italicRe.findAll(slice).forEach { m ->
             if (spans.none { s -> m.range.first in s.start until s.end })
-                spans += Span(m.range.first, m.range.last + 1,
-                    m.range.first + 1, m.range.last,
+                spans += Span(m.range.first, m.range.last + 1, m.range.first + 1, m.range.last,
                     SpanStyle(fontStyle = FontStyle.Italic))
         }
-
         spans.sortBy { it.start }
-
         var cursor = 0
         for (span in spans) {
-            if (span.start > cursor)
-                out += Segment.Visible(regionStart + cursor, regionStart + span.start)
+            if (span.start > cursor) out += Segment.Visible(regionStart + cursor, regionStart + span.start)
             out += Segment.Hidden(regionStart + span.start, regionStart + span.innerStart)
             if (span.innerStart < span.innerEnd)
                 out += Segment.Visible(regionStart + span.innerStart, regionStart + span.innerEnd, span.style)
             out += Segment.Hidden(regionStart + span.innerEnd, regionStart + span.end)
             cursor = span.end
         }
-        if (cursor < slice.length)
-            out += Segment.Visible(regionStart + cursor, regionEnd)
+        if (cursor < slice.length) out += Segment.Visible(regionStart + cursor, regionEnd)
     }
 }
 
-// ── Formatting Toolbar — Liquid Glass ────────────────────────────────────────
+// ── Formatting Toolbar ────────────────────────────────────────────────────────
 
 @Composable
 private fun FormattingToolbar(
@@ -467,59 +508,35 @@ private fun FormattingToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .background(
-                brush = Brush.verticalGradient(
-                    listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f)),
-                ),
-            ),
+            .background(Brush.verticalGradient(
+                listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f))
+            )),
     ) {
         HorizontalDivider(color = GlassBorder, thickness = 0.5.dp)
-
         Row(
-            modifier          = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier          = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToolbarButton(icon = Lucide.Bold,      label = "Kalın",       onClick = onBold)
-            ToolbarButton(icon = Lucide.Italic,    label = "İtalik",      onClick = onItalic)
-            ToolbarButton(icon = Lucide.Underline, label = "Altı çizili", onClick = onUnderline)
-
+            ToolbarButton(Lucide.Bold,      "Kalın",       onBold)
+            ToolbarButton(Lucide.Italic,    "İtalik",      onItalic)
+            ToolbarButton(Lucide.Underline, "Altı çizili", onUnderline)
             Box {
-                IconButton(
-                    onClick  = { headingMenuExpanded = true },
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        imageVector        = Lucide.Heading2,
-                        contentDescription = "Başlık",
-                        tint               = if (headingMenuExpanded)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
+                IconButton(onClick = { headingMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(Lucide.Heading2, "Başlık",
+                        tint     = if (headingMenuExpanded) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp))
                 }
-                StillDropdownMenu(
-                    expanded         = headingMenuExpanded,
-                    onDismissRequest = { headingMenuExpanded = false },
-                ) {
+                StillDropdownMenu(expanded = headingMenuExpanded, onDismissRequest = { headingMenuExpanded = false }) {
                     listOf("H1" to 1, "H2" to 2, "H3" to 3).forEach { (label, level) ->
-                        StillDropdownMenuItem(
-                            text    = label,
-                            onClick = {
-                                onHeading(level)
-                                headingMenuExpanded = false
-                            },
-                        )
+                        StillDropdownMenuItem(text = label, onClick = { onHeading(level); headingMenuExpanded = false })
                     }
                 }
             }
-
-            ToolbarButton(icon = Lucide.List,  label = "Liste",   onClick = onBullet)
+            ToolbarButton(Lucide.List,  "Liste",   onBullet)
             Spacer(Modifier.weight(1f))
-            ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
-            ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
+            ToolbarButton(Lucide.Undo2, "Geri al", onUndo)
+            ToolbarButton(Lucide.Redo2, "Yinele",  onRedo)
             Spacer(Modifier.width(4.dp))
         }
     }
@@ -528,11 +545,6 @@ private fun FormattingToolbar(
 @Composable
 private fun ToolbarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(
-            imageVector        = icon,
-            contentDescription = label,
-            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier           = Modifier.size(20.dp),
-        )
+        Icon(icon, label, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }
