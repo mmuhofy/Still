@@ -146,8 +146,8 @@ fun NoteEditorScreen(
                 onBullet      = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
                 onUndo        = { viewModel.onEvent(NoteEditorEvent.Undo) },
                 onRedo        = { viewModel.onEvent(NoteEditorEvent.Redo) },
-                showAccept    = false,
-                onAcceptGhost = {},
+                showAccept    = state.ghostText.isNotBlank(),
+                onAcceptGhost = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
             )
         },
     ) { innerPadding ->
