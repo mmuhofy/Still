@@ -1,7 +1,9 @@
 package com.still.app.ui.editor
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -26,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -37,8 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -54,6 +56,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
@@ -90,22 +93,16 @@ fun NoteEditorScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
-    val titleFocusRequester = remember { FocusRequester() }
-    val bodyFocusRequester  = remember { FocusRequester() }
+    val variantsSheetState = rememberModalBottomSheetState()
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
     }
 
-    LaunchedEffect(Unit) {
-        if (state.noteId == -1L) titleFocusRequester.requestFocus()
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading && state.noteId == -1L) focusRequester.requestFocus()
     }
-
-    // Split raw text into title (first line) and body (rest)
-    val rawText   = state.content.text
-    val newlineIdx = rawText.indexOf('\n')
-    val titleText  = if (newlineIdx == -1) rawText else rawText.substring(0, newlineIdx)
-    val bodyText   = if (newlineIdx == -1) "" else rawText.substring(newlineIdx + 1)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -113,26 +110,24 @@ fun NoteEditorScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector        = Lucide.ArrowLeft,
-                            contentDescription = "Geri",
-                            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Icon(Lucide.ArrowLeft, "Geri", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 title = {},
                 actions = {
-                    IconButton(onClick = { showSheet = true }) {
-                        Icon(
-                            imageVector        = Lucide.EllipsisVertical,
-                            contentDescription = "Daha fazla",
-                            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (state.isAiLoading) {
+                        CircularProgressIndicator(
+                            modifier    = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color       = MaterialTheme.colorScheme.primary,
                         )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    IconButton(onClick = { showSheet = true }) {
+                        Icon(Lucide.EllipsisVertical, "Daha fazla", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
@@ -156,151 +151,22 @@ fun NoteEditorScreen(
                 .verticalScroll(rememberScrollState())
                 .imePadding(),
         ) {
-            // ── Title field ───────────────────────────────────────────────────
-            BasicTextField(
-                value         = TextFieldValue(
-                    text      = titleText,
-                    selection = state.content.selection.let { sel ->
-                        // Clamp selection to title range
-                        TextRange(
-                            sel.start.coerceIn(0, titleText.length),
-                            sel.end.coerceIn(0, titleText.length),
-                        )
-                    },
-                ),
-                onValueChange = { tfv ->
-                    // Merge title change back into full raw text
-                    val newRaw = if (bodyText.isEmpty()) tfv.text else "${tfv.text}\n$bodyText"
-                    viewModel.onEvent(
-                        NoteEditorEvent.ContentChanged(
-                            TextFieldValue(
-                                text      = newRaw,
-                                selection = TextRange(tfv.selection.start, tfv.selection.end),
-                            )
-                        )
-                    )
-                },
-                modifier      = Modifier
+            NoteTextField(
+                value          = state.content,
+                ghostText      = state.ghostText,
+                realTextLength = state.realTextLength,
+                aiError        = state.aiError,
+                onValueChange  = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
+                onLongPressGhost = { viewModel.onEvent(NoteEditorEvent.RequestVariants) },
+                focusRequester = focusRequester,
+                modifier       = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 16.dp)
-                    .focusRequester(titleFocusRequester),
-                textStyle     = MaterialTheme.typography.headlineSmall.copy(
-                    color      = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-                cursorBrush   = SolidColor(Gold),
-                singleLine    = false,
-                decorationBox = { inner ->
-                    Box {
-                        if (titleText.isEmpty()) {
-                            Text(
-                                text  = "Başlık",
-                                style = MaterialTheme.typography.headlineSmall.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                            )
-                        }
-                        inner()
-                    }
-                },
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // ── Gold gradient divider ─────────────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 20.dp)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                Gold.copy(alpha = 0.6f),
-                                Gold.copy(alpha = 0.15f),
-                                Color.Transparent,
-                            )
-                        )
-                    )
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            // ── Body field ────────────────────────────────────────────────────
-            // Append ghost text to body for rendering — ghost is styled via VisualTransformation
-            val ghostText  = state.ghostText
-            val bodyWithGhost = bodyText + ghostText
-            val bodyTfv = TextFieldValue(
-                text      = bodyWithGhost,
-                selection = state.content.selection.let { sel ->
-                    val offset = if (newlineIdx == -1) 0 else newlineIdx + 1
-                    val start  = (sel.start - offset).coerceIn(0, bodyText.length)
-                    val end    = (sel.end   - offset).coerceIn(0, bodyText.length)
-                    TextRange(start, end)
-                },
-            )
-            val bodyTransformation = remember(ghostText) {
-                MarkdownVisualTransformation(ghostLength = ghostText.length)
-            }
-
-            BasicTextField(
-                value         = bodyTfv,
-                onValueChange = { tfv ->
-                    // If user tapped inside ghost region → accept ghost
-                    if (ghostText.isNotEmpty() && tfv.selection.start > bodyText.length) {
-                        viewModel.onEvent(NoteEditorEvent.AcceptGhost)
-                        return@BasicTextField
-                    }
-                    // Strip ghost suffix before merging — ghost must not enter raw storage
-                    val realBody = if (ghostText.isNotEmpty() && tfv.text.endsWith(ghostText))
-                        tfv.text.dropLast(ghostText.length)
-                    else
-                        tfv.text
-                    // Merge body change back into full raw text
-                    val newRaw = if (realBody.isEmpty() && titleText.isEmpty()) ""
-                                 else "$titleText\n$realBody"
-                    val offset = if (newlineIdx == -1) 0 else newlineIdx + 1
-                    viewModel.onEvent(
-                        NoteEditorEvent.ContentChanged(
-                            TextFieldValue(
-                                text      = newRaw,
-                                selection = TextRange(
-                                    (tfv.selection.start + offset).coerceAtMost(newRaw.length),
-                                    (tfv.selection.end   + offset).coerceAtMost(newRaw.length),
-                                ),
-                            )
-                        )
-                    )
-                },
-                modifier      = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 80.dp)
-                    .focusRequester(bodyFocusRequester),
-                textStyle     = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
-                cursorBrush          = SolidColor(Gold),
-                visualTransformation = bodyTransformation,
-                decorationBox = { inner ->
-                    Box {
-                        if (bodyText.isEmpty()) {
-                            Text(
-                                text  = "Yazmaya başla...",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                            )
-                        }
-                        inner()
-                    }
-                },
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
             )
         }
     }
 
-    // ── Bottom sheet ──────────────────────────────────────────────────────────
+    // ── Options bottom sheet ──────────────────────────────────────────────────
     if (showSheet) {
         ModalBottomSheet(
             onDismissRequest = { showSheet = false },
@@ -325,25 +191,42 @@ fun NoteEditorScreen(
                     icon    = if (state.isPinned) Lucide.PinOff else Lucide.Pin,
                     label   = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
                     tint    = MaterialTheme.colorScheme.onSurface,
-                    onClick = {
-                        viewModel.onEvent(NoteEditorEvent.TogglePin)
-                        showSheet = false
-                    },
+                    onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin); showSheet = false },
                 )
-                HorizontalDivider(
-                    modifier  = Modifier.padding(horizontal = 20.dp),
-                    color     = SheetBorder,
-                    thickness = 0.5.dp,
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SheetBorder, thickness = 0.5.dp)
                 SheetItem(
                     icon    = Lucide.Trash2,
                     label   = "Sil",
                     tint    = MaterialTheme.colorScheme.error,
-                    onClick = {
-                        showSheet = false
-                        viewModel.onEvent(NoteEditorEvent.DeleteNote)
-                    },
+                    onClick = { showSheet = false; viewModel.onEvent(NoteEditorEvent.DeleteNote) },
                 )
+            }
+        }
+    }
+
+    // ── Variants bottom sheet ─────────────────────────────────────────────────
+    if (state.showVariants) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.onEvent(NoteEditorEvent.DismissVariants) },
+            sheetState       = variantsSheetState,
+            containerColor   = SheetBg,
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    text     = "Alternatifler",
+                    style    = MaterialTheme.typography.titleSmall,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                state.variants.forEach { variant ->
+                    TextButton(
+                        onClick  = { viewModel.onEvent(NoteEditorEvent.AcceptVariant(variant)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(text = variant, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                Spacer(Modifier.padding(bottom = 16.dp))
             }
         }
     }
@@ -352,30 +235,156 @@ fun NoteEditorScreen(
 // ── Sheet Item ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SheetItem(
-    icon: ImageVector,
-    label: String,
-    tint: Color,
-    onClick: () -> Unit,
-) {
+private fun SheetItem(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier          = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(icon, label, tint = tint, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(16.dp))
-        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tint)
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
+    }
+}
+
+// ── Text Field ────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NoteTextField(
+    value: TextFieldValue,
+    ghostText: String,
+    realTextLength: Int,
+    aiError: String?,
+    onValueChange: (TextFieldValue) -> Unit,
+    onLongPressGhost: () -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester,
+    modifier: Modifier = Modifier,
+) {
+    val text         = value.text
+    val firstNewline = text.indexOf('\n')
+    val titleEnd     = if (firstNewline == -1) text.length else firstNewline
+    val titleFontSize = MaterialTheme.typography.headlineSmall.fontSize
+    val ghostColor   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+
+    // Build AnnotatedString: real text (title bold) + ghost (muted italic)
+    val annotated = buildAnnotatedString {
+        if (titleEnd > 0) {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = titleFontSize)) {
+                append(text.substring(0, titleEnd))
+            }
+            // Title/body divider — rendered as a newline with a visual separator below
+            append(text.substring(titleEnd))
+        } else {
+            append(text)
+        }
+        if (ghostText.isNotBlank() && value.selection.start == text.length) {
+            withStyle(SpanStyle(color = ghostColor, fontStyle = FontStyle.Italic)) {
+                append(ghostText)
+            }
+        }
+    }
+
+    val displayValue = TextFieldValue(
+        annotatedString = annotated,
+        selection       = value.selection,
+        composition     = value.composition,
+    )
+
+    // VisualTransformation for body markdown (applied after title line)
+    val transformation = remember { MarkdownVisualTransformation() }
+
+    Column(modifier = modifier) {
+        // Divider after title line — gold gradient, only visible when text has a newline
+        if (firstNewline != -1) {
+            // We need the divider between title and body — use decorationBox trick via Column
+        }
+
+        BasicTextField(
+            value         = displayValue,
+            onValueChange = { new ->
+                val strippedText = if (new.text.length > realTextLength + ghostText.length) {
+                    new.text.take(realTextLength) + new.text.drop(realTextLength + ghostText.length)
+                } else {
+                    new.text.take(realTextLength.coerceAtMost(new.text.length))
+                }
+                // Only fire event if real text changed — prevents ghost recomposition loop
+                if (strippedText != text) {
+                    onValueChange(
+                        TextFieldValue(
+                            text        = strippedText,
+                            selection   = TextRange(new.selection.start.coerceAtMost(strippedText.length)),
+                            composition = new.composition,
+                        )
+                    )
+                }
+            },
+            modifier      = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+            textStyle     = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+            ),
+            cursorBrush   = SolidColor(Gold),
+            decorationBox = { innerTextField ->
+                Column {
+                    Box {
+                        if (text.isEmpty()) {
+                            Text(
+                                text  = "Yazmaya başla...",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            )
+                        }
+                        innerTextField()
+                    }
+                    // Gold gradient divider — appears only when body exists (newline present)
+                    if (firstNewline != -1) {
+                        Spacer(Modifier.height(2.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Gold.copy(alpha = 0.55f), Gold.copy(alpha = 0.12f), Color.Transparent)
+                                    )
+                                )
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            },
+        )
+
+        // Ghost accept hint
+        if (ghostText.isNotBlank() && value.selection.start == text.length) {
+            Text(
+                text     = "↵ kabul et  •  basılı tut → alternatifler",
+                style    = MaterialTheme.typography.labelSmall.copy(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                ),
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .combinedClickable(onClick = {}, onLongClick = onLongPressGhost),
+            )
+        }
+
+        if (aiError != null) {
+            Text(
+                text     = aiError,
+                style    = MaterialTheme.typography.bodySmall.copy(
+                    color     = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    fontStyle = FontStyle.Italic,
+                ),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
 
-private class MarkdownVisualTransformation(
-    private val ghostLength: Int = 0,
-) : VisualTransformation {
+private class MarkdownVisualTransformation : VisualTransformation {
 
     private sealed class Segment {
         data class Visible(val rawStart: Int, val rawEnd: Int, val style: SpanStyle? = null) : Segment()
@@ -419,21 +428,6 @@ private class MarkdownVisualTransformation(
                     if (dStart < dEnd) addStyle(seg.style, dStart, dEnd)
                 }
             }
-            // Ghost text — italic, muted, non-interactive feel
-            if (ghostLength > 0) {
-                val ghostDisplayStart = rawToDisplay[(raw.length - ghostLength).coerceAtLeast(0)]
-                val ghostDisplayEnd   = displayBuilder.length
-                if (ghostDisplayStart < ghostDisplayEnd) {
-                    addStyle(
-                        SpanStyle(
-                            fontStyle = FontStyle.Italic,
-                            color     = Color(0x60B8A369), // muted gold
-                        ),
-                        ghostDisplayStart,
-                        ghostDisplayEnd,
-                    )
-                }
-            }
         }
 
         val offsetMapping = object : OffsetMapping {
@@ -451,29 +445,36 @@ private class MarkdownVisualTransformation(
         val lines     = raw.lines()
         var rawCursor = 0
 
-        lines.forEachIndexed { _, line ->
-            val lineStart    = rawCursor
-            val headingMatch = Regex("""^(#{1,3}) """).find(line)
-            val isBullet     = line.startsWith("- ")
+        lines.forEachIndexed { lineIndex, line ->
+            val lineStart = rawCursor
 
-            when {
-                headingMatch != null -> {
-                    val prefixLen = headingMatch.value.length
-                    val fs = when (headingMatch.groupValues[1].length) {
-                        1    -> TextUnit(22f, TextUnitType.Sp)
-                        2    -> TextUnit(20f, TextUnitType.Sp)
-                        else -> TextUnit(18f, TextUnitType.Sp)
+            if (lineIndex == 0) {
+                // Title — SemiBold handled in AnnotatedString above, no markdown parsing
+                if (line.isNotEmpty()) {
+                    result += Segment.Visible(lineStart, lineStart + line.length)
+                }
+            } else {
+                val headingMatch = Regex("""^(#{1,3}) """).find(line)
+                val isBullet     = line.startsWith("- ")
+                when {
+                    headingMatch != null -> {
+                        val prefixLen = headingMatch.value.length
+                        val fs = when (headingMatch.groupValues[1].length) {
+                            1    -> TextUnit(22f, TextUnitType.Sp)
+                            2    -> TextUnit(20f, TextUnitType.Sp)
+                            else -> TextUnit(18f, TextUnitType.Sp)
+                        }
+                        result += Segment.Hidden(lineStart, lineStart + prefixLen)
+                        if (prefixLen < line.length)
+                            result += Segment.Visible(lineStart + prefixLen, lineStart + line.length,
+                                SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs))
                     }
-                    result += Segment.Hidden(lineStart, lineStart + prefixLen)
-                    if (prefixLen < line.length)
-                        result += Segment.Visible(lineStart + prefixLen, lineStart + line.length,
-                            SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs))
+                    isBullet -> {
+                        result += Segment.Hidden(lineStart, lineStart + 2)
+                        parseInline(raw, lineStart + 2, lineStart + line.length, result)
+                    }
+                    else -> parseInline(raw, lineStart, lineStart + line.length, result)
                 }
-                isBullet -> {
-                    result += Segment.Hidden(lineStart, lineStart + 2)
-                    parseInline(raw, lineStart + 2, lineStart + line.length, result)
-                }
-                else -> parseInline(raw, lineStart, lineStart + line.length, result)
             }
 
             rawCursor += line.length
@@ -495,18 +496,15 @@ private class MarkdownVisualTransformation(
         data class Span(val start: Int, val end: Int, val innerStart: Int, val innerEnd: Int, val style: SpanStyle)
         val spans = mutableListOf<Span>()
         underlineRe.findAll(slice).forEach { m ->
-            spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1,
-                SpanStyle(textDecoration = TextDecoration.Underline))
+            spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1, SpanStyle(textDecoration = TextDecoration.Underline))
         }
         boldRe.findAll(slice).forEach { m ->
             if (spans.none { s -> m.range.first in s.start until s.end })
-                spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1,
-                    SpanStyle(fontWeight = FontWeight.Bold))
+                spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1, SpanStyle(fontWeight = FontWeight.Bold))
         }
         italicRe.findAll(slice).forEach { m ->
             if (spans.none { s -> m.range.first in s.start until s.end })
-                spans += Span(m.range.first, m.range.last + 1, m.range.first + 1, m.range.last,
-                    SpanStyle(fontStyle = FontStyle.Italic))
+                spans += Span(m.range.first, m.range.last + 1, m.range.first + 1, m.range.last, SpanStyle(fontStyle = FontStyle.Italic))
         }
         spans.sortBy { it.start }
         var cursor = 0
@@ -540,9 +538,7 @@ private fun FormattingToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .background(Brush.verticalGradient(
-                listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f))
-            )),
+            .background(Brush.verticalGradient(listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f)))),
     ) {
         HorizontalDivider(color = GlassBorder, thickness = 0.5.dp)
         Row(
@@ -555,8 +551,7 @@ private fun FormattingToolbar(
             Box {
                 IconButton(onClick = { headingMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
                     Icon(Lucide.Heading2, "Başlık",
-                        tint     = if (headingMenuExpanded) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint     = if (headingMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp))
                 }
                 StillDropdownMenu(expanded = headingMenuExpanded, onDismissRequest = { headingMenuExpanded = false }) {
