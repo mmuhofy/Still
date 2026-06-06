@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -28,6 +28,8 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Trash2
 import com.still.app.util.Constants
 
+// Must match NoteListItem's shape exactly so bg doesn't bleed outside rounded corners
+private val ItemShape    = RoundedCornerShape(14.dp)
 private val DeleteRed    = Color(0xFFCF3B4B)
 private val DeleteRedDim = Color(0xFF2A1518)
 
@@ -38,55 +40,48 @@ fun SwipeToDeleteBox(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    // Track progress outside dismissState so confirmValueChange can read it
-    // without a forward reference.
     var currentProgress by remember { mutableFloatStateOf(0f) }
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
+            if (value == SwipeToDismissBoxValue.EndToStart)
                 currentProgress >= Constants.SWIPE_DELETE_THRESHOLD
-            } else {
-                false
-            }
+            else false
         },
     )
 
-    // Keep progress in sync so confirmValueChange always has the latest value
     currentProgress = dismissState.progress
 
     LaunchedEffect(dismissState.currentValue) {
-        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
-            onDeleted()
-        }
+        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) onDeleted()
     }
 
     SwipeToDismissBox(
-        state = dismissState,
-        modifier = modifier,
+        state                       = dismissState,
+        modifier                    = modifier,
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true,
         backgroundContent = {
             val willDelete = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
             val bgColor by animateColorAsState(
-                targetValue = if (willDelete) DeleteRed else DeleteRedDim,
+                targetValue   = if (willDelete) DeleteRed else DeleteRedDim,
                 animationSpec = tween(Constants.ANIMATION_DURATION_MS),
-                label = "swipe_bg",
+                label         = "swipe_bg",
             )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(MaterialTheme.shapes.medium)
+                    .clip(ItemShape)          // same shape as item — no bleed
                     .background(bgColor),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(
-                    imageVector = Lucide.Trash2,
+                    imageVector        = Lucide.Trash2,
                     contentDescription = "Sil",
-                    tint = Color.White,
-                    modifier = Modifier
+                    tint               = Color.White.copy(alpha = if (willDelete) 1f else 0.5f),
+                    modifier           = Modifier
                         .padding(end = 20.dp)
-                        .size(22.dp),
+                        .size(20.dp),
                 )
             }
         },

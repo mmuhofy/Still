@@ -21,24 +21,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class NoteViewMode { CARD, LIST }
+enum class NoteViewMode  { CARD, LIST }
 enum class NoteSortOrder { LAST_MODIFIED, CREATED, TITLE }
 
 data class NotesListUiState(
-    val pinnedNotes: List<Note> = emptyList(),
+    val pinnedNotes: List<Note>   = emptyList(),
     val unpinnedNotes: List<Note> = emptyList(),
-    val viewMode: NoteViewMode = NoteViewMode.CARD,
-    val sortOrder: NoteSortOrder = NoteSortOrder.LAST_MODIFIED,
-    val pendingDeleteNote: Note? = null,
-    val isLoading: Boolean = true,
+    val viewMode: NoteViewMode    = NoteViewMode.LIST,
+    val sortOrder: NoteSortOrder  = NoteSortOrder.LAST_MODIFIED,
+    val pendingDeleteNote: Note?  = null,
+    val isLoading: Boolean        = true,
 )
 
 sealed interface NotesListEvent {
-    data class DeleteNote(val note: Note) : NotesListEvent
-    data object UndoDelete : NotesListEvent
-    data object ConfirmDelete : NotesListEvent
-    data class TogglePin(val note: Note) : NotesListEvent
-    data class SetViewMode(val mode: NoteViewMode) : NotesListEvent
+    data class DeleteNote(val note: Note)    : NotesListEvent
+    data object UndoDelete                   : NotesListEvent
+    data object ConfirmDelete                : NotesListEvent
+    data class TogglePin(val note: Note)     : NotesListEvent
+    data class SetViewMode(val mode: NoteViewMode)    : NotesListEvent
     data class SetSortOrder(val order: NoteSortOrder) : NotesListEvent
 }
 
@@ -54,13 +54,14 @@ class NotesListViewModel @Inject constructor(
 
     private val viewModeFlow = dataStore.data.map { prefs ->
         when (prefs[viewModeKey]) {
+            "card" -> NoteViewMode.CARD
             "list" -> NoteViewMode.LIST
-            else   -> NoteViewMode.CARD
+            else   -> NoteViewMode.LIST   // default: list
         }
     }
 
-    private val sortOrderFlow      = MutableStateFlow(NoteSortOrder.LAST_MODIFIED)
-    private val pendingDeleteFlow  = MutableStateFlow<Note?>(null)
+    private val sortOrderFlow     = MutableStateFlow(NoteSortOrder.LAST_MODIFIED)
+    private val pendingDeleteFlow = MutableStateFlow<Note?>(null)
 
     val uiState = combine(
         getAllNotes(),
@@ -75,49 +76,32 @@ class NotesListViewModel @Inject constructor(
             NoteSortOrder.TITLE         -> notes.sortedBy { it.title.lowercase() }
         }
 
-        // FIX: Filter the pending-delete note out of the visible list immediately.
-        // Room hasn't deleted it yet (we wait for undo window), but the user
-        // should see it disappear at once. If undo is tapped we just clear
-        // pendingDelete and the note reappears from the Room flow naturally.
-        val visible = if (pendingDelete != null) {
+        val visible = if (pendingDelete != null)
             sorted.filter { it.id != pendingDelete.id }
-        } else {
+        else
             sorted
-        }
-
-        val pinned   = visible.filter { it.isPinned }
-        val unpinned = visible.filter { !it.isPinned }
 
         NotesListUiState(
-            pinnedNotes      = pinned,
-            unpinnedNotes    = unpinned,
-            viewMode         = viewMode,
-            sortOrder        = sortOrder,
+            pinnedNotes       = visible.filter { it.isPinned },
+            unpinnedNotes     = visible.filter { !it.isPinned },
+            viewMode          = viewMode,
+            sortOrder         = sortOrder,
             pendingDeleteNote = pendingDelete,
-            isLoading        = false,
+            isLoading         = false,
         )
     }.stateIn(
-        scope          = viewModelScope,
-        started        = SharingStarted.WhileSubscribed(5_000),
-        initialValue   = NotesListUiState(),
+        scope        = viewModelScope,
+        started      = SharingStarted.WhileSubscribed(5_000),
+        initialValue = NotesListUiState(),
     )
 
     fun onEvent(event: NotesListEvent) {
         when (event) {
+            is NotesListEvent.DeleteNote -> pendingDeleteFlow.update { event.note }
 
-            is NotesListEvent.DeleteNote -> {
-                // Immediately hide from list via pendingDeleteFlow.
-                // Actual Room delete is deferred until snackbar dismisses.
-                pendingDeleteFlow.update { event.note }
-            }
-
-            NotesListEvent.UndoDelete -> {
-                // Clear pending — note reappears from Room flow automatically.
-                pendingDeleteFlow.update { null }
-            }
+            NotesListEvent.UndoDelete    -> pendingDeleteFlow.update { null }
 
             NotesListEvent.ConfirmDelete -> {
-                // Snackbar timed out or was dismissed — commit to Room.
                 val note = pendingDeleteFlow.value ?: return
                 viewModelScope.launch {
                     deleteNote(note.id)
@@ -125,19 +109,15 @@ class NotesListViewModel @Inject constructor(
                 }
             }
 
-            is NotesListEvent.TogglePin -> {
-                viewModelScope.launch {
-                    pinNote(event.note.id, !event.note.isPinned)
-                }
+            is NotesListEvent.TogglePin -> viewModelScope.launch {
+                pinNote(event.note.id, !event.note.isPinned)
             }
 
-            is NotesListEvent.SetViewMode -> {
-                viewModelScope.launch {
-                    dataStore.edit { prefs ->
-                        prefs[viewModeKey] = when (event.mode) {
-                            NoteViewMode.CARD -> "card"
-                            NoteViewMode.LIST -> "list"
-                        }
+            is NotesListEvent.SetViewMode -> viewModelScope.launch {
+                dataStore.edit { prefs ->
+                    prefs[viewModeKey] = when (event.mode) {
+                        NoteViewMode.CARD -> "card"
+                        NoteViewMode.LIST -> "list"
                     }
                 }
             }
