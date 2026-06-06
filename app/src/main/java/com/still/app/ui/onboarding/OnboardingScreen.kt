@@ -1,6 +1,10 @@
 package com.still.app.ui.onboarding
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,8 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -35,15 +37,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.still.app.util.Constants
 
-private const val TOTAL_PAGES = 3
+private const val TOTAL_PAGES  = 3
 private const val ANIM_DURATION = Constants.ANIMATION_DURATION_MS
+
+// Calm Luxury palette constants
+private val Gold         = Color(0xFFB8A369)
+private val GoldLight    = Color(0xFFD4B97A)
+private val CardBg       = Color(0xFF1A1A24)
+private val CardBgDim    = Color(0xFF14141C)
+private val CardSelected = Color(0xFF1E1C14)
 
 @Composable
 fun OnboardingScreen(
@@ -52,89 +64,102 @@ fun OnboardingScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Navigate out once DataStore write is triggered
     LaunchedEffect(state.isCompleting) {
         if (state.isCompleting) onComplete()
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(56.dp))
+            Spacer(Modifier.height(52.dp))
 
-            // Page indicator
-            PageIndicator(
-                totalPages = TOTAL_PAGES,
-                currentPage = state.currentPage,
+            // Logo wordmark
+            Text(
+                text  = "still",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight    = FontWeight.Light,
+                    letterSpacing = 6.sp,
+                    color         = Gold.copy(alpha = 0.7f),
+                ),
             )
 
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(32.dp))
 
-            // Page content — slides left on advance
+            // Page indicator
+            PageIndicator(totalPages = TOTAL_PAGES, currentPage = state.currentPage)
+
+            Spacer(Modifier.height(44.dp))
+
+            // Page content
             AnimatedContent(
-                targetState = state.currentPage,
+                targetState  = state.currentPage,
                 transitionSpec = {
                     (slideInHorizontally(tween(ANIM_DURATION)) { it } + fadeIn(tween(ANIM_DURATION)))
                         .togetherWith(slideOutHorizontally(tween(ANIM_DURATION)) { -it } + fadeOut(tween(ANIM_DURATION)))
                 },
-                label = "onboarding_page",
+                label    = "onboarding_page",
                 modifier = Modifier.weight(1f),
             ) { page ->
                 when (page) {
                     0 -> PageTheme(
-                        selectedTheme = state.selectedTheme,
-                        onThemeSelected = { viewModel.onEvent(OnboardingEvent.ThemeSelected(it)) },
+                        selectedTheme    = state.selectedTheme,
+                        onThemeSelected  = { viewModel.onEvent(OnboardingEvent.ThemeSelected(it)) },
                     )
                     1 -> PageColorScheme(
-                        selectedScheme = state.selectedColorScheme,
+                        selectedScheme   = state.selectedColorScheme,
                         onSchemeSelected = { viewModel.onEvent(OnboardingEvent.ColorSchemeSelected(it)) },
                     )
                     2 -> PageFeatureMode(
-                        aiEnabled = state.aiEnabled,
-                        onModeSelected = { viewModel.onEvent(OnboardingEvent.AiModeSelected(it)) },
+                        aiEnabled       = state.aiEnabled,
+                        onModeSelected  = { viewModel.onEvent(OnboardingEvent.AiModeSelected(it)) },
                     )
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(28.dp))
 
-            // CTA button
-            Button(
-                onClick = {
-                    if (state.currentPage < TOTAL_PAGES - 1) {
-                        viewModel.onEvent(OnboardingEvent.NextPage)
-                    } else {
-                        viewModel.onEvent(OnboardingEvent.Complete)
-                    }
-                },
+            // CTA — pill shaped, gold gradient
+            val ctaLabel = when (state.currentPage) {
+                0    -> "Temayı seç"
+                1    -> "Görünümü onayla"
+                else -> "Still'e başla"
+            }
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = MaterialTheme.shapes.small,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.background,
-                ),
+                    .height(54.dp)
+                    .clip(CircleShape)
+                    .background(Brush.horizontalGradient(listOf(Gold, GoldLight)))
+                    .clickable {
+                        if (state.currentPage < TOTAL_PAGES - 1) {
+                            viewModel.onEvent(OnboardingEvent.NextPage)
+                        } else {
+                            viewModel.onEvent(OnboardingEvent.Complete)
+                        }
+                    },
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (state.currentPage < TOTAL_PAGES - 1) "Devam" else "Başla",
-                    style = MaterialTheme.typography.labelLarge,
+                    text  = ctaLabel,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color      = Color(0xFF1A1208),
+                    ),
                 )
             }
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(44.dp))
         }
     }
 }
 
-// ── Page 1 — Theme Selection ───────────────────────────────────────────────────
+// ── Page 1 — Theme ────────────────────────────────────────────────────────────
 
 @Composable
 private fun PageTheme(
@@ -143,97 +168,216 @@ private fun PageTheme(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxSize(),
+        modifier            = Modifier.fillMaxSize(),
     ) {
-        Text(
-            text = "Temanı seç",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "İstediğin zaman ayarlardan değiştirebilirsin.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(40.dp))
-
-        // Theme options — only Calm Luxury active in Phase 1
-        val themes = listOf(
-            Triple("calm_luxury", "Calm Luxury", "Derin, altın vurgulu"),
-            Triple("flat_minimal", "Flat Minimal", "Yakında"),
-            Triple("liquid_glass", "Liquid Glass", "Yakında"),
+        PageTitle(
+            title    = "Nasıl görünsün?",
+            subtitle = "Yazmak istediğin atmosferi seç.\nİstediğin zaman değiştirebilirsin.",
         )
 
-        themes.forEach { (key, name, desc) ->
-            val isAvailable = key == "calm_luxury"
-            ThemeOptionCard(
-                name = name,
-                description = desc,
-                isSelected = selectedTheme == key,
-                isEnabled = isAvailable,
-                onClick = { if (isAvailable) onThemeSelected(key) },
+        Spacer(Modifier.height(32.dp))
+
+        ThemeCard(
+            key         = "calm_luxury",
+            name        = "Calm Luxury",
+            tagline     = "Derin koyu, altın vurgular — sessiz güç hissi.",
+            preview     = { CalmLuxuryPreview() },
+            isSelected  = selectedTheme == "calm_luxury",
+            isAvailable = true,
+            onClick     = { onThemeSelected("calm_luxury") },
+        )
+        Spacer(Modifier.height(12.dp))
+        ThemeCard(
+            key         = "flat_minimal",
+            name        = "Flat Minimal",
+            tagline     = "Saf beyaz, sıfır dikkat dağıtıcı.",
+            preview     = { FlatMinimalPreview() },
+            isSelected  = selectedTheme == "flat_minimal",
+            isAvailable = false,
+            onClick     = {},
+        )
+        Spacer(Modifier.height(12.dp))
+        ThemeCard(
+            key         = "liquid_glass",
+            name        = "Liquid Glass",
+            tagline     = "Işık ve derinlik — kayan cam efekti.",
+            preview     = { LiquidGlassPreview() },
+            isSelected  = selectedTheme == "liquid_glass",
+            isAvailable = false,
+            onClick     = {},
+        )
+    }
+}
+
+// ── Theme card ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ThemeCard(
+    key: String,
+    name: String,
+    tagline: String,
+    preview: @Composable () -> Unit,
+    isSelected: Boolean,
+    isAvailable: Boolean,
+    onClick: () -> Unit,
+) {
+    val borderColor by animateColorAsState(
+        targetValue   = if (isSelected) Gold else Color.White.copy(alpha = 0.08f),
+        animationSpec = tween(ANIM_DURATION),
+        label         = "border_$key",
+    )
+    val bgColor by animateColorAsState(
+        targetValue   = if (isSelected) CardSelected else CardBg,
+        animationSpec = tween(ANIM_DURATION),
+        label         = "bg_$key",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor)
+            .border(
+                width = if (isSelected) 1.5.dp else 0.5.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(16.dp),
             )
-            Spacer(Modifier.height(12.dp))
+            .clickable(enabled = isAvailable, onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Mini visual preview
+        Box(
+            modifier = Modifier
+                .size(width = 56.dp, height = 44.dp)
+                .clip(RoundedCornerShape(8.dp))
+        ) { preview() }
+
+        Spacer(Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text  = name,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = if (isAvailable) 1f else 0.35f
+                        ),
+                    ),
+                )
+                if (!isAvailable) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text  = "Yakında",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = Gold.copy(alpha = 0.5f),
+                        ),
+                    )
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text  = tagline,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                        alpha = if (isAvailable) 0.7f else 0.25f
+                    ),
+                ),
+            )
+        }
+
+        if (isSelected) {
+            Spacer(Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(Gold, CircleShape),
+            )
+        }
+    }
+}
+
+// ── Theme mini previews ────────────────────────────────────────────────────────
+
+@Composable
+private fun CalmLuxuryPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF13121A))
+    ) {
+        // Simulated text lines
+        Column(
+            modifier = Modifier.padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(Modifier.fillMaxWidth(0.7f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFB8A369).copy(alpha = 0.8f)))
+            Box(Modifier.fillMaxWidth(0.9f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f)))
+            Box(Modifier.fillMaxWidth(0.75f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.15f)))
+            Box(Modifier.fillMaxWidth(0.85f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.15f)))
+        }
+        // Gold accent bottom line
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(0.4f)
+                .height(1.dp)
+                .background(Gold.copy(alpha = 0.4f))
+        )
+    }
+}
+
+@Composable
+private fun FlatMinimalPreview() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF7F7F5))
+    ) {
+        Column(
+            modifier = Modifier.padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(Modifier.fillMaxWidth(0.7f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF1A1A1A).copy(alpha = 0.8f)))
+            Box(Modifier.fillMaxWidth(0.9f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF1A1A1A).copy(alpha = 0.2f)))
+            Box(Modifier.fillMaxWidth(0.75f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF1A1A1A).copy(alpha = 0.12f)))
+            Box(Modifier.fillMaxWidth(0.85f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF1A1A1A).copy(alpha = 0.12f)))
         }
     }
 }
 
 @Composable
-private fun ThemeOptionCard(
-    name: String,
-    description: String,
-    isSelected: Boolean,
-    isEnabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val borderColor = if (isSelected)
-        MaterialTheme.colorScheme.primary
-    else
-        MaterialTheme.colorScheme.outlineVariant
-
-    val alpha = if (isEnabled) 1f else 0.4f
-
-    Row(
+private fun LiquidGlassPreview() {
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .border(
-                width = if (isSelected) 1.5.dp else 1.dp,
-                color = borderColor,
-                shape = MaterialTheme.shapes.medium,
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF1A1F35), Color(0xFF0D1526))
+                )
             )
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(enabled = isEnabled, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
-            )
-        }
-        if (isSelected) {
-            Spacer(Modifier.width(12.dp))
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape),
-            )
+        // Frosted glass card
+        Box(
+            modifier = Modifier
+                .padding(6.dp)
+                .fillMaxWidth()
+                .height(28.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.White.copy(alpha = 0.08f))
+                .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+        )
+        Column(
+            modifier = Modifier.padding(start = 8.dp, top = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Box(Modifier.fillMaxWidth(0.5f).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.5f)))
+            Box(Modifier.fillMaxWidth(0.7f).height(2.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.2f)))
         }
     }
 }
 
-// ── Page 2 — Dark / Light ─────────────────────────────────────────────────────
+// ── Page 2 — Color Scheme ─────────────────────────────────────────────────────
 
 @Composable
 private fun PageColorScheme(
@@ -244,36 +388,26 @@ private fun PageColorScheme(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxSize(),
+        modifier            = Modifier.fillMaxSize(),
     ) {
-        Text(
-            text = "Görünüm",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Sisteminle senkronize ya da sabit bir mod seç.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(40.dp))
-
-        val schemes = listOf(
-            Triple("auto", "Otomatik", "Sistem ayarını takip eder (şu an: ${if (systemIsDark) "koyu" else "açık"})"),
-            Triple("dark", "Koyu", "Her zaman koyu mod"),
-            Triple("light", "Açık", "Her zaman açık mod"),
+        PageTitle(
+            title    = "Aydınlık mı, karanlık mı?",
+            subtitle = "Gözün ne ister? Sistem ayarını\ntakip edebilir ya da sabit seçebilirsin.",
         )
 
-        schemes.forEach { (key, name, desc) ->
-            ThemeOptionCard(
-                name = name,
+        Spacer(Modifier.height(32.dp))
+
+        listOf(
+            Triple("auto",  "Otomatik", "Şu an: ${if (systemIsDark) "koyu mod" else "açık mod"}"),
+            Triple("dark",  "Koyu",     "Her zaman gece havası"),
+            Triple("light", "Açık",     "Her zaman gün ışığı"),
+        ).forEach { (key, name, desc) ->
+            OptionCard(
+                name       = name,
                 description = desc,
-                isSelected = selectedScheme == key,
-                isEnabled = true,
-                onClick = { onSchemeSelected(key) },
+                isSelected  = selectedScheme == key,
+                isEnabled   = true,
+                onClick     = { onSchemeSelected(key) },
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -289,63 +423,155 @@ private fun PageFeatureMode(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxSize(),
+        modifier            = Modifier.fillMaxSize(),
     ) {
-        Text(
-            text = "Nasıl başlamak istersin?",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
+        PageTitle(
+            title    = "Nasıl yazarsın?",
+            subtitle = "Sade bir başlangıç mı, yoksa\nAI destekli akış mı?",
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Her zaman ayarlardan değiştirebilirsin.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(40.dp))
 
-        ThemeOptionCard(
-            name = "Sade başla",
-            description = "Sadece not al. Sade, hızlı, odaklı.",
-            isSelected = !aiEnabled,
-            isEnabled = true,
-            onClick = { onModeSelected(false) },
+        Spacer(Modifier.height(32.dp))
+
+        OptionCard(
+            name        = "Sadece ben",
+            description = "Düşüncelerine dokunulmadan, temiz bir sayfa.",
+            isSelected  = !aiEnabled,
+            isEnabled   = true,
+            onClick     = { onModeSelected(false) },
         )
         Spacer(Modifier.height(12.dp))
-        ThemeOptionCard(
-            name = "AI ile başla",
-            description = "Yazarken AI önerileri göster. İnternet gerektirir.",
-            isSelected = aiEnabled,
-            isEnabled = true,
-            onClick = { onModeSelected(true) },
+        OptionCard(
+            name        = "Ben + AI",
+            description = "Yazarken öneriler gelir, kabul etmek sana kalmış.",
+            isSelected  = aiEnabled,
+            isEnabled   = true,
+            onClick     = { onModeSelected(true) },
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        Text(
+            text  = "Her iki seçenek de ayarlardan değiştirilebilir.",
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            ),
+            textAlign = TextAlign.Center,
         )
     }
+}
+
+// ── Option Card (generic — used in Page 2 & 3) ────────────────────────────────
+
+@Composable
+private fun OptionCard(
+    name: String,
+    description: String,
+    isSelected: Boolean,
+    isEnabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val borderColor by animateColorAsState(
+        targetValue   = if (isSelected) Gold else Color.White.copy(alpha = 0.08f),
+        animationSpec = tween(ANIM_DURATION),
+        label         = "opt_border_$name",
+    )
+    val bgColor by animateColorAsState(
+        targetValue   = if (isSelected) CardSelected else CardBg,
+        animationSpec = tween(ANIM_DURATION),
+        label         = "opt_bg_$name",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor)
+            .border(
+                width = if (isSelected) 1.5.dp else 0.5.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(16.dp),
+            )
+            .clickable(enabled = isEnabled, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text  = name,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = if (isEnabled) 1f else 0.35f
+                    ),
+                ),
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text  = description,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                        alpha = if (isEnabled) 0.65f else 0.25f
+                    ),
+                ),
+            )
+        }
+        if (isSelected) {
+            Spacer(Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(Gold, CircleShape),
+            )
+        }
+    }
+}
+
+// ── Page Title ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PageTitle(title: String, subtitle: String) {
+    Text(
+        text      = title,
+        style     = MaterialTheme.typography.headlineMedium.copy(
+            fontWeight = FontWeight.SemiBold,
+        ),
+        color     = MaterialTheme.colorScheme.onBackground,
+        textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(10.dp))
+    Text(
+        text      = subtitle,
+        style     = MaterialTheme.typography.bodyMedium,
+        color     = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        textAlign = TextAlign.Center,
+    )
 }
 
 // ── Page Indicator ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun PageIndicator(
-    totalPages: Int,
-    currentPage: Int,
-) {
+private fun PageIndicator(totalPages: Int, currentPage: Int) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment     = Alignment.CenterVertically,
     ) {
         repeat(totalPages) { i ->
             val isActive = i == currentPage
+            val width by animateDpAsState(
+                targetValue   = if (isActive) 28.dp else 6.dp,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                label         = "indicator_$i",
+            )
+            val color by animateColorAsState(
+                targetValue   = if (isActive) Gold else Color.White.copy(alpha = 0.2f),
+                animationSpec = tween(ANIM_DURATION),
+                label         = "indicator_color_$i",
+            )
             Box(
                 modifier = Modifier
                     .height(3.dp)
-                    .width(if (isActive) 24.dp else 8.dp)
+                    .width(width)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        if (isActive) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outlineVariant
-                    ),
+                    .background(color),
             )
         }
     }
