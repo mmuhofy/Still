@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Bold
 import com.composables.icons.lucide.EllipsisVertical
@@ -94,7 +96,7 @@ fun NoteEditorScreen(
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val variantsSheetState = rememberModalBottomSheetState()
-    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
@@ -257,7 +259,7 @@ private fun NoteTextField(
     aiError: String?,
     onValueChange: (TextFieldValue) -> Unit,
     onLongPressGhost: () -> Unit,
-    focusRequester: androidx.compose.ui.focus.FocusRequester,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val text         = value.text
