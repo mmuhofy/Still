@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -65,6 +66,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Bold
 import com.composables.icons.lucide.EllipsisVertical
@@ -142,8 +146,8 @@ fun NoteEditorScreen(
                 onBullet      = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
                 onUndo        = { viewModel.onEvent(NoteEditorEvent.Undo) },
                 onRedo        = { viewModel.onEvent(NoteEditorEvent.Redo) },
-                showAccept    = state.ghostText.isNotBlank(),
-                onAcceptGhost = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
+                showAccept    = false,
+                onAcceptGhost = {},
             )
         },
     ) { innerPadding ->
@@ -161,7 +165,8 @@ fun NoteEditorScreen(
                 ghostText      = state.ghostText,
                 realTextLength = state.realTextLength,
                 aiError        = state.aiError,
-                onValueChange  = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
+                onValueChange    = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
+                onAcceptGhost    = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
                 onLongPressGhost = { viewModel.onEvent(NoteEditorEvent.RequestVariants) },
                 focusRequester = focusRequester,
                 modifier       = Modifier
@@ -261,6 +266,7 @@ private fun NoteTextField(
     realTextLength: Int,
     aiError: String?,
     onValueChange: (TextFieldValue) -> Unit,
+    onAcceptGhost: () -> Unit,
     onLongPressGhost: () -> Unit,
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
