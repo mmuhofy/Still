@@ -253,9 +253,14 @@ fun NoteEditorScreen(
                         viewModel.onEvent(NoteEditorEvent.AcceptGhost)
                         return@BasicTextField
                     }
+                    // Strip ghost suffix before merging — ghost must not enter raw storage
+                    val realBody = if (ghostText.isNotEmpty() && tfv.text.endsWith(ghostText))
+                        tfv.text.dropLast(ghostText.length)
+                    else
+                        tfv.text
                     // Merge body change back into full raw text
-                    val newRaw = if (tfv.text.isEmpty() && titleText.isEmpty()) ""
-                                 else "$titleText\n${tfv.text}"
+                    val newRaw = if (realBody.isEmpty() && titleText.isEmpty()) ""
+                                 else "$titleText\n$realBody"
                     val offset = if (newlineIdx == -1) 0 else newlineIdx + 1
                     viewModel.onEvent(
                         NoteEditorEvent.ContentChanged(
