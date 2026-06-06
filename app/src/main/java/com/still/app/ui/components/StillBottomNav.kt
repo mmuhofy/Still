@@ -1,27 +1,34 @@
 package com.still.app.ui.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,39 +39,31 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Settings
-import com.still.app.util.Constants
 
-private val PillBg       = Color(0xFF18181F)
-private val PillActive   = Color(0xFFB8A369)
-private val PillInactive = Color(0x55FFFFFF)
+private val PillBg         = Color(0xFF16161F)
+private val PillBorder     = Color(0x18FFFFFF)
+private val ActiveBg       = Color(0xFF1E1C14)
+private val ActiveTint     = Color(0xFFB8A369)
+private val InactiveTint   = Color(0x60FFFFFF)
+private val FabGradient    = Brush.linearGradient(listOf(Color(0xFFD4B97A), Color(0xFFB8A369)))
+private val FabShadow      = Color(0xFFB8A369)
 
-// Gold gradient for the center FAB button
-private val FabGradient = Brush.radialGradient(
-    colors = listOf(Color(0xFFD4B97A), Color(0xFFB8A369)),
-)
-private val FabShadowColor = Color(0xFFB8A369)
+private const val ANIM_MS = 280
 
 sealed class BottomNavTab(
     val route: String,
     val icon: ImageVector,
     val label: String,
 ) {
-    data object Notes : BottomNavTab(
-        route = "notes_list",
-        icon = Lucide.House,
-        label = "Notlar",
-    )
-    data object Settings : BottomNavTab(
-        route = "settings",
-        icon = Lucide.Settings,
-        label = "Ayarlar",
-    )
+    data object Notes : BottomNavTab("notes_list", Lucide.House, "Notlar")
+    data object Settings : BottomNavTab("settings", Lucide.Settings, "Ayarlar")
 
     companion object {
         val tabs = listOf(Notes, Settings)
@@ -75,7 +74,7 @@ sealed class BottomNavTab(
 fun StillBottomNav(
     currentRoute: String?,
     onTabSelected: (BottomNavTab) -> Unit,
-    onNewNote: () -> Unit,           // center FAB action
+    onNewNote: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -85,39 +84,35 @@ fun StillBottomNav(
             .padding(bottom = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // Pill container — Notes | [FAB] | Settings
         Row(
             modifier = Modifier
                 .shadow(
-                    elevation = 32.dp,
-                    shape = RoundedCornerShape(50),
-                    ambientColor = Color.Black.copy(alpha = 0.7f),
-                    spotColor  = Color.Black.copy(alpha = 0.7f),
+                    elevation    = 24.dp,
+                    shape        = RoundedCornerShape(50),
+                    ambientColor = Color.Black.copy(alpha = 0.6f),
+                    spotColor    = Color.Black.copy(alpha = 0.6f),
                 )
                 .clip(RoundedCornerShape(50))
                 .background(PillBg)
-                .padding(1.dp)
-                .clip(RoundedCornerShape(50))
-                .background(PillBg.copy(alpha = 0.96f))
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .padding(horizontal = 6.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment     = Alignment.CenterVertically,
         ) {
-            // Left tab — Notes
-            PillTabItem(
-                icon  = BottomNavTab.Notes.icon,
-                label = BottomNavTab.Notes.label,
+            // Left — Notes
+            NavTabItem(
+                icon     = BottomNavTab.Notes.icon,
+                label    = BottomNavTab.Notes.label,
                 selected = currentRoute == BottomNavTab.Notes.route,
                 onClick  = { onTabSelected(BottomNavTab.Notes) },
             )
 
-            // Center FAB — new note
-            CenterFabItem(onClick = onNewNote)
+            // Center — FAB
+            CenterFab(onClick = onNewNote)
 
-            // Right tab — Settings
-            PillTabItem(
-                icon  = BottomNavTab.Settings.icon,
-                label = BottomNavTab.Settings.label,
+            // Right — Settings
+            NavTabItem(
+                icon     = BottomNavTab.Settings.icon,
+                label    = BottomNavTab.Settings.label,
                 selected = currentRoute == BottomNavTab.Settings.route,
                 onClick  = { onTabSelected(BottomNavTab.Settings) },
             )
@@ -125,109 +120,119 @@ fun StillBottomNav(
     }
 }
 
-// ── Center FAB ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun CenterFabItem(onClick: () -> Unit) {
-    val scale = remember { Animatable(1f) }
-
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 6.dp)
-            // Lifts the FAB slightly above the pill
-            .offset(y = (-6).dp)
-            .shadow(
-                elevation = 12.dp,
-                shape = CircleShape,
-                ambientColor = FabShadowColor.copy(alpha = 0.5f),
-                spotColor   = FabShadowColor.copy(alpha = 0.5f),
-            )
-            .size(52.dp)
-            .clip(CircleShape)
-            .background(FabGradient)
-            .scale(scale.value)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {
-                    onClick()
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Lucide.Plus,
-            contentDescription = "Yeni not",
-            tint = Color(0xFF1A1A22),   // dark icon on gold bg
-            modifier = Modifier.size(24.dp),
-        )
-    }
-}
-
 // ── Tab Item ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PillTabItem(
+private fun NavTabItem(
     icon: ImageVector,
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val iconTint by animateColorAsState(
-        targetValue  = if (selected) PillActive else PillInactive,
-        animationSpec = tween(Constants.ANIMATION_DURATION_MS),
-        label = "pill_tint",
+    val bgAlpha by animateFloatAsState(
+        targetValue   = if (selected) 1f else 0f,
+        animationSpec = tween(ANIM_MS),
+        label         = "tab_bg_$label",
     )
-    val bgColor by animateColorAsState(
-        targetValue  = if (selected) PillActive.copy(alpha = 0.16f) else Color.Transparent,
-        animationSpec = tween(Constants.ANIMATION_DURATION_MS),
-        label = "pill_bg",
+    val iconTint by androidx.compose.animation.animateColorAsState(
+        targetValue   = if (selected) ActiveTint else InactiveTint,
+        animationSpec = tween(ANIM_MS),
+        label         = "tab_tint_$label",
     )
-    val itemSize by animateDpAsState(
-        targetValue  = if (selected) 54.dp else 48.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "pill_size",
+    val scale by animateFloatAsState(
+        targetValue   = if (selected) 1f else 0.92f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness    = Spring.StiffnessMedium,
+        ),
+        label = "tab_scale_$label",
     )
-    val floatOffset by animateDpAsState(
-        targetValue  = if (selected) (-2).dp else 0.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "pill_float",
-    )
-
-    val scale = remember { Animatable(1f) }
-
-    LaunchedEffect(selected) {
-        if (selected) {
-            scale.animateTo(0.82f, spring(stiffness = Spring.StiffnessHigh))
-            scale.animateTo(
-                targetValue  = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness    = Spring.StiffnessMedium,
-                ),
-            )
-        }
-    }
 
     Box(
         modifier = Modifier
-            .size(itemSize)
-            .offset { IntOffset(0, floatOffset.roundToPx()) }
-            .clip(CircleShape)
-            .background(bgColor)
-            .scale(scale.value)
+            .clip(RoundedCornerShape(50))
+            .background(ActiveBg.copy(alpha = bgAlpha))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
+                indication        = null,
+                onClick           = onClick,
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .scale(scale),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector        = icon,
+                contentDescription = label,
+                tint               = iconTint,
+                modifier           = Modifier.size(20.dp),
+            )
+            // Label slides in horizontally when selected
+            AnimatedVisibility(
+                visible = selected,
+                enter   = expandHorizontally(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness    = Spring.StiffnessMedium,
+                    )
+                ) + fadeIn(tween(ANIM_MS)),
+                exit    = shrinkHorizontally(tween(ANIM_MS / 2)) + fadeOut(tween(ANIM_MS / 2)),
+            ) {
+                Row {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text       = label,
+                        color      = ActiveTint,
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines   = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Center FAB ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CenterFab(onClick: () -> Unit) {
+    val scale by animateFloatAsState(
+        targetValue   = 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label         = "fab_scale",
+    )
+
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 4.dp)
+            .offset(y = (-5).dp)
+            .shadow(
+                elevation    = 14.dp,
+                shape        = CircleShape,
+                ambientColor = FabShadow.copy(alpha = 0.45f),
+                spotColor    = FabShadow.copy(alpha = 0.45f),
+            )
+            .size(50.dp)
+            .clip(CircleShape)
+            .background(FabGradient)
+            .scale(scale)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication        = null,
+                onClick           = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = iconTint,
-            modifier = Modifier.size(22.dp),
+            imageVector        = Lucide.Plus,
+            contentDescription = "Yeni not",
+            tint               = Color(0xFF1A1208),
+            modifier           = Modifier.size(22.dp),
         )
     }
 }
