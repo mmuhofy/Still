@@ -40,22 +40,23 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.lucide.compose.icons.LucideIcons
-import com.lucide.compose.icons.lucide.Bot
-import com.lucide.compose.icons.lucide.ChevronRight
-import com.lucide.compose.icons.lucide.Focus
-import com.lucide.compose.icons.lucide.Info
-import com.lucide.compose.icons.lucide.MessageSquare
-import com.lucide.compose.icons.lucide.Moon
-import com.lucide.compose.icons.lucide.Shield
-import com.lucide.compose.icons.lucide.Type
-import com.lucide.compose.icons.lucide.AlignLeft
+import com.composables.icons.lucide.AlignLeft
+import com.composables.icons.lucide.Bot
+import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Focus
+import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.MessageSquare
+import com.composables.icons.lucide.Moon
+import com.composables.icons.lucide.Shield
+import com.composables.icons.lucide.Type
 import com.still.app.ui.theme.CalmGold
 import com.still.app.ui.theme.CalmGoldSubtle
-import com.still.app.ui.theme.SurfaceDark
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -106,9 +107,8 @@ fun SettingsScreen(
 
             // ── Görünüm ───────────────────────────────────────────────────────
             SettingsGroup(title = "Görünüm") {
-                // Tema modu — custom 3-card selector (no SegmentedButton)
                 SettingsRowWithContent(
-                    icon = LucideIcons.Moon,
+                    icon = Lucide.Moon,
                     label = "Tema modu",
                 ) {
                     ColorSchemeSelector(
@@ -119,9 +119,8 @@ fun SettingsScreen(
 
                 SettingsGroupDivider()
 
-                // Font seçimi
                 SettingsRowWithContent(
-                    icon = LucideIcons.Type,
+                    icon = Lucide.Type,
                     label = "Yazı tipi",
                     description = uiState.selectedFont.label,
                 ) {
@@ -135,7 +134,7 @@ fun SettingsScreen(
             // ── Yazma ─────────────────────────────────────────────────────────
             SettingsGroup(title = "Yazma") {
                 SettingsSwitchRow(
-                    icon = LucideIcons.Bot,
+                    icon = Lucide.Bot,
                     label = "AI tamamlama",
                     description = "Yazarken akıllı öneri göster",
                     checked = uiState.aiEnabled,
@@ -146,7 +145,7 @@ fun SettingsScreen(
 
                 // Focus mode — Phase 2, not yet implemented
                 SettingsSwitchRow(
-                    icon = LucideIcons.Focus,
+                    icon = Lucide.Focus,
                     label = "Odak modu",
                     description = "Yalnızca metni göster",
                     checked = uiState.focusModeEnabled,
@@ -159,7 +158,7 @@ fun SettingsScreen(
 
                 // Typewriter mode — Phase 2, not yet implemented
                 SettingsSwitchRow(
-                    icon = LucideIcons.AlignLeft,
+                    icon = Lucide.AlignLeft,
                     label = "Daktilo modu",
                     description = "Aktif satırı ortada tut",
                     checked = uiState.typewriterModeEnabled,
@@ -172,7 +171,7 @@ fun SettingsScreen(
             // ── Hakkında ──────────────────────────────────────────────────────
             SettingsGroup(title = "Hakkında") {
                 SettingsReadOnlyRow(
-                    icon = LucideIcons.Info,
+                    icon = Lucide.Info,
                     label = "Sürüm",
                     value = appVersion,
                 )
@@ -180,7 +179,7 @@ fun SettingsScreen(
                 SettingsGroupDivider()
 
                 SettingsTappableRow(
-                    icon = LucideIcons.MessageSquare,
+                    icon = Lucide.MessageSquare,
                     label = "Geri bildirim gönder",
                     onClick = { /* TODO: open feedback link */ },
                 )
@@ -188,7 +187,7 @@ fun SettingsScreen(
                 SettingsGroupDivider()
 
                 SettingsTappableRow(
-                    icon = LucideIcons.Shield,
+                    icon = Lucide.Shield,
                     label = "Gizlilik politikası",
                     onClick = { /* TODO: open privacy policy link */ },
                 )
@@ -204,17 +203,14 @@ fun SettingsScreen(
 @Composable
 private fun SettingsGroup(
     title: String,
-    content: @Composable Column.() -> Unit,
+    content: @Composable () -> Unit,
 ) {
     Column {
         Text(
             text = title.uppercase(),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
-            letterSpacing = androidx.compose.ui.unit.TextUnit(
-                value = 1.2f,
-                type = androidx.compose.ui.unit.TextUnitType.Sp,
-            ),
+            letterSpacing = TextUnit(value = 1.2f, type = TextUnitType.Sp),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
         Column(
@@ -222,8 +218,9 @@ private fun SettingsGroup(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surface),
-            content = content,
-        )
+        ) {
+            content()
+        }
     }
 }
 
@@ -281,7 +278,7 @@ private fun SettingsSwitchRow(
     description: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    badge: String? = null,         // e.g. "Yakında"
+    badge: String? = null,
     enabled: Boolean = true,
 ) {
     Row(
@@ -383,7 +380,7 @@ private fun SettingsTappableRow(
             modifier = Modifier.weight(1f),
         )
         Icon(
-            imageVector = LucideIcons.ChevronRight,
+            imageVector = Lucide.ChevronRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),
@@ -439,15 +436,16 @@ private fun ColorSchemeSelector(
     onSelect: (AppColorScheme) -> Unit,
 ) {
     val options = listOf(
-        AppColorScheme.AUTO to "Oto",
-        AppColorScheme.DARK to "Koyu",
+        AppColorScheme.AUTO  to "Oto",
+        AppColorScheme.DARK  to "Koyu",
         AppColorScheme.LIGHT to "Açık",
     )
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { (scheme, label) ->
             val selected = current == scheme
             val bgColor by animateColorAsState(
-                targetValue = if (selected) CalmGold else MaterialTheme.colorScheme.surfaceVariant,
+                targetValue = if (selected) CalmGold
+                              else MaterialTheme.colorScheme.surfaceVariant,
                 animationSpec = tween(durationMillis = 200),
                 label = "scheme_bg_$label",
             )
@@ -487,7 +485,8 @@ private fun FontSelector(
         AppFont.entries.forEach { font ->
             val selected = current == font
             val bgColor by animateColorAsState(
-                targetValue = if (selected) CalmGold else MaterialTheme.colorScheme.surfaceVariant,
+                targetValue = if (selected) CalmGold
+                              else MaterialTheme.colorScheme.surfaceVariant,
                 animationSpec = tween(durationMillis = 200),
                 label = "font_bg_${font.name}",
             )
