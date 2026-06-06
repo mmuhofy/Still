@@ -59,18 +59,37 @@ SQLite (Room 2.x)
 
 ## FILE & ARTIFACT RULES
 
-- **Always provide files as artifacts — never write them inline as text**
+- Always provide files as artifacts — never write them inline as text
 - One artifact per file
 - Always include the full file content — never truncate
 - If updating an existing file, use the artifact update mechanism
 - Artifact title must match the actual filename (e.g., `NoteRepository.kt`)
 
+### Artifact Path Requirements
+
+- Always include the full project path for every artifact.
+- Format:
+
+  app/src/main/java/com/still/app/ui/notes/NotesScreen.kt
+
+- Never provide only the filename.
+- When multiple files are modified, list every affected file path separately.
+
 ---
 
 ## GIT COMMIT RULES
 
+### Build Environment Rules
+
+- Local builds are NOT considered authoritative.
+- The project is built and validated through GitHub Actions.
+- Every code change MUST include a proposed commit message.
+- Commit messages are required because GitHub Actions builds are triggered from commits.
+- Never finish an implementation response without providing a commit message.
+
 ### When to output a commit message
-- **Only when Muhofy explicitly confirms a fix, feature, or change is working.**
+- Every implementation, fix, refactor, or configuration change must include a commit message.
+- Documentation-only discussions may omit commit messages.
 - **Never output a commit message speculatively.**
 - **Never output a commit message for documentation-only responses.**
 
@@ -265,6 +284,29 @@ chore(deps): add room, hilt, coroutines dependencies
 - Collaborative editing
 
 ---
+
+## PROJECT FILE ACCESS RULES
+
+### Raw File Protocol
+
+- The agent does NOT assume project files exist locally.
+- Before analyzing, modifying, or referencing project code, request the GitHub raw file URL from Muhofy.
+- Always fetch and read the provided raw file before making code changes.
+
+### Raw Link Freshness Rule
+
+- Never reuse previously provided raw file contents.
+- If the same file is needed again in a later task, request the raw URL again.
+- Treat previously fetched file contents as potentially outdated.
+- Always re-fetch from a newly provided raw URL before performing analysis or modifications.
+
+### Missing File Rule
+
+- If a required file has not been provided as a raw URL:
+  - Stop implementation.
+  - Request the raw URL.
+  - Do not guess file contents.
+  - Do not reconstruct missing code from memory.
 
 ## MEMORY BANK
 

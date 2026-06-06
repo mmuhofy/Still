@@ -19,10 +19,19 @@ import javax.inject.Inject
 
 enum class AppColorScheme { AUTO, DARK, LIGHT }
 
+// ── Font ──────────────────────────────────────────────────────────────────────
+
+enum class AppFont(val label: String, val prefValue: String) {
+    INTER(label = "Inter", prefValue = "inter"),
+    LORA(label = "Lora", prefValue = "lora"),
+    MONO(label = "Mono", prefValue = "mono"),
+}
+
 // ── UI State ──────────────────────────────────────────────────────────────────
 
 data class SettingsUiState(
     val colorScheme: AppColorScheme = AppColorScheme.AUTO,
+    val selectedFont: AppFont = AppFont.INTER,
     val aiEnabled: Boolean = false,
     val focusModeEnabled: Boolean = false,
     val typewriterModeEnabled: Boolean = false,
@@ -33,6 +42,7 @@ data class SettingsUiState(
 
 sealed interface SettingsEvent {
     data class SetColorScheme(val scheme: AppColorScheme) : SettingsEvent
+    data class SetFont(val font: AppFont) : SettingsEvent
     data class SetAiEnabled(val enabled: Boolean) : SettingsEvent
     data class SetFocusMode(val enabled: Boolean) : SettingsEvent
     data class SetTypewriterMode(val enabled: Boolean) : SettingsEvent
@@ -46,6 +56,7 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val colorSchemeKey = stringPreferencesKey(Constants.PrefKeys.COLOR_SCHEME)
+    private val fontKey = stringPreferencesKey(Constants.PrefKeys.SELECTED_FONT)
     private val aiEnabledKey = booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)
     private val focusModeKey = booleanPreferencesKey(Constants.PrefKeys.FOCUS_MODE_ENABLED)
     private val typewriterModeKey = booleanPreferencesKey(Constants.PrefKeys.TYPEWRITER_MODE_ENABLED)
@@ -53,10 +64,12 @@ class SettingsViewModel @Inject constructor(
     val uiState = dataStore.data.map { prefs ->
         SettingsUiState(
             colorScheme = when (prefs[colorSchemeKey]) {
-                "dark" -> AppColorScheme.DARK
+                "dark"  -> AppColorScheme.DARK
                 "light" -> AppColorScheme.LIGHT
-                else -> AppColorScheme.AUTO
+                else    -> AppColorScheme.AUTO
             },
+            selectedFont = AppFont.entries.firstOrNull { it.prefValue == prefs[fontKey] }
+                ?: AppFont.INTER,
             aiEnabled = prefs[aiEnabledKey] ?: false,
             focusModeEnabled = prefs[focusModeKey] ?: false,
             typewriterModeEnabled = prefs[typewriterModeKey] ?: false,
@@ -74,10 +87,13 @@ class SettingsViewModel @Inject constructor(
                 when (event) {
                     is SettingsEvent.SetColorScheme ->
                         prefs[colorSchemeKey] = when (event.scheme) {
-                            AppColorScheme.AUTO -> "auto"
-                            AppColorScheme.DARK -> "dark"
+                            AppColorScheme.AUTO  -> "auto"
+                            AppColorScheme.DARK  -> "dark"
                             AppColorScheme.LIGHT -> "light"
                         }
+
+                    is SettingsEvent.SetFont ->
+                        prefs[fontKey] = event.font.prefValue
 
                     is SettingsEvent.SetAiEnabled ->
                         prefs[aiEnabledKey] = event.enabled

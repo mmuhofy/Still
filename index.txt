@@ -93,6 +93,7 @@ https://raw.githubusercontent.com/mmuhofy/Still/main/settings.gradle.kts
 
 ## tools/
 
+https://raw.githubusercontent.com/mmuhofy/Still/main/tools/BGRemoverFromLogo.html
 https://raw.githubusercontent.com/mmuhofy/Still/main/tools/IconManager.sh
 https://raw.githubusercontent.com/mmuhofy/Still/main/tools/InAppIconsPreview.html
 https://raw.githubusercontent.com/mmuhofy/Still/main/tools/gemini_model_tester.py

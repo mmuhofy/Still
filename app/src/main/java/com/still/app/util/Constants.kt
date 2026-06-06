@@ -34,9 +34,10 @@ object Constants {
     // DataStore preference keys — defined as strings to avoid DataStore import here
     object PrefKeys {
         const val ONBOARDING_COMPLETED = "onboarding_completed"
-        const val NOTE_VIEW_MODE = "note_view_mode"       // "card" | "list"
-        const val COLOR_SCHEME = "color_scheme"           // "auto" | "dark" | "light"
-        const val SELECTED_THEME = "selected_theme"       // "calm_luxury" | ...
+        const val NOTE_VIEW_MODE = "note_view_mode"           // "card" | "list"
+        const val COLOR_SCHEME = "color_scheme"               // "auto" | "dark" | "light"
+        const val SELECTED_THEME = "selected_theme"           // "calm_luxury" | ...
+        const val SELECTED_FONT = "selected_font"             // "inter" | "lora" | "mono"
         const val AI_ENABLED = "ai_enabled"
         const val FOCUS_MODE_ENABLED = "focus_mode_enabled"
         const val TYPEWRITER_MODE_ENABLED = "typewriter_mode_enabled"
