@@ -229,8 +229,11 @@ fun NoteEditorScreen(
             Spacer(Modifier.height(14.dp))
 
             // ── Body field ────────────────────────────────────────────────────
+            // Append ghost text to body for rendering — ghost is styled via VisualTransformation
+            val ghostText  = state.ghostText
+            val bodyWithGhost = bodyText + ghostText
             val bodyTfv = TextFieldValue(
-                text      = bodyText,
+                text      = bodyWithGhost,
                 selection = state.content.selection.let { sel ->
                     val offset = if (newlineIdx == -1) 0 else newlineIdx + 1
                     val start  = (sel.start - offset).coerceIn(0, bodyText.length)
@@ -238,11 +241,18 @@ fun NoteEditorScreen(
                     TextRange(start, end)
                 },
             )
-            val bodyTransformation = remember { MarkdownVisualTransformation() }
+            val bodyTransformation = remember(ghostText) {
+                MarkdownVisualTransformation(ghostLength = ghostText.length)
+            }
 
             BasicTextField(
                 value         = bodyTfv,
                 onValueChange = { tfv ->
+                    // If user tapped inside ghost region → accept ghost
+                    if (ghostText.isNotEmpty() && tfv.selection.start > bodyText.length) {
+                        viewModel.onEvent(NoteEditorEvent.AcceptGhost)
+                        return@BasicTextField
+                    }
                     // Merge body change back into full raw text
                     val newRaw = if (tfv.text.isEmpty() && titleText.isEmpty()) ""
                                  else "$titleText\n${tfv.text}"
@@ -358,7 +368,9 @@ private fun SheetItem(
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
 
-private class MarkdownVisualTransformation : VisualTransformation {
+private class MarkdownVisualTransformation(
+    private val ghostLength: Int = 0,
+) : VisualTransformation {
 
     private sealed class Segment {
         data class Visible(val rawStart: Int, val rawEnd: Int, val style: SpanStyle? = null) : Segment()
@@ -400,6 +412,21 @@ private class MarkdownVisualTransformation : VisualTransformation {
                     val dStart = rawToDisplay[seg.rawStart]
                     val dEnd   = rawToDisplay[seg.rawEnd.coerceAtMost(raw.length)]
                     if (dStart < dEnd) addStyle(seg.style, dStart, dEnd)
+                }
+            }
+            // Ghost text — italic, muted, non-interactive feel
+            if (ghostLength > 0) {
+                val ghostDisplayStart = rawToDisplay[(raw.length - ghostLength).coerceAtLeast(0)]
+                val ghostDisplayEnd   = displayBuilder.length
+                if (ghostDisplayStart < ghostDisplayEnd) {
+                    addStyle(
+                        SpanStyle(
+                            fontStyle = FontStyle.Italic,
+                            color     = Color(0x60B8A369), // muted gold
+                        ),
+                        ghostDisplayStart,
+                        ghostDisplayEnd,
+                    )
                 }
             }
         }
