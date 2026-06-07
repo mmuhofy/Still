@@ -1,7 +1,9 @@
 package com.still.app.ui.editor
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -18,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -26,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -37,17 +43,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -56,11 +58,17 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Bold
 import com.composables.icons.lucide.EllipsisVertical
@@ -92,14 +100,15 @@ fun NoteEditorScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+    val variantsSheetState = rememberModalBottomSheetState()
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onBack()
     }
 
-    LaunchedEffect(Unit) {
-        if (state.noteId == -1L) focusRequester.requestFocus()
+    LaunchedEffect(state.isLoading) {
+        if (!state.isLoading && state.noteId == -1L) focusRequester.requestFocus()
     }
 
     Scaffold(
@@ -108,26 +117,24 @@ fun NoteEditorScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector        = Lucide.ArrowLeft,
-                            contentDescription = "Geri",
-                            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Icon(Lucide.ArrowLeft, "Geri", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 title = {},
                 actions = {
-                    IconButton(onClick = { showSheet = true }) {
-                        Icon(
-                            imageVector        = Lucide.EllipsisVertical,
-                            contentDescription = "Daha fazla",
-                            tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (state.isAiLoading) {
+                        CircularProgressIndicator(
+                            modifier    = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color       = MaterialTheme.colorScheme.primary,
                         )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    IconButton(onClick = { showSheet = true }) {
+                        Icon(Lucide.EllipsisVertical, "Daha fazla", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
@@ -157,8 +164,10 @@ fun NoteEditorScreen(
                 value            = state.content,
                 ghostText        = state.ghostText,
                 realTextLength   = state.realTextLength,
+                aiError          = state.aiError,
                 onValueChange    = { viewModel.onEvent(NoteEditorEvent.ContentChanged(it)) },
                 onAcceptGhost    = { viewModel.onEvent(NoteEditorEvent.AcceptGhost) },
+                onLongPressGhost = { viewModel.onEvent(NoteEditorEvent.RequestVariants) },
                 focusRequester   = focusRequester,
                 modifier         = Modifier
                     .fillMaxWidth()
@@ -167,7 +176,7 @@ fun NoteEditorScreen(
         }
     }
 
-    // ── Note options bottom sheet ─────────────────────────────────────────────
+    // ── Options bottom sheet ──────────────────────────────────────────────────
     if (showSheet) {
         ModalBottomSheet(
             onDismissRequest = { showSheet = false },
@@ -189,28 +198,45 @@ fun NoteEditorScreen(
                     .padding(bottom = 16.dp),
             ) {
                 SheetItem(
-                    icon  = if (state.isPinned) Lucide.PinOff else Lucide.Pin,
-                    label = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
-                    tint  = MaterialTheme.colorScheme.onSurface,
-                    onClick = {
-                        viewModel.onEvent(NoteEditorEvent.TogglePin)
-                        showSheet = false
-                    },
+                    icon    = if (state.isPinned) Lucide.PinOff else Lucide.Pin,
+                    label   = if (state.isPinned) "Sabitlemeyi kaldır" else "Sabitle",
+                    tint    = MaterialTheme.colorScheme.onSurface,
+                    onClick = { viewModel.onEvent(NoteEditorEvent.TogglePin); showSheet = false },
                 )
-                HorizontalDivider(
-                    modifier  = Modifier.padding(horizontal = 20.dp),
-                    color     = SheetBorder,
-                    thickness = 0.5.dp,
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = SheetBorder, thickness = 0.5.dp)
                 SheetItem(
                     icon    = Lucide.Trash2,
                     label   = "Sil",
                     tint    = MaterialTheme.colorScheme.error,
-                    onClick = {
-                        showSheet = false
-                        viewModel.onEvent(NoteEditorEvent.DeleteNote)
-                    },
+                    onClick = { showSheet = false; viewModel.onEvent(NoteEditorEvent.DeleteNote) },
                 )
+            }
+        }
+    }
+
+    // ── Variants bottom sheet ─────────────────────────────────────────────────
+    if (state.showVariants) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.onEvent(NoteEditorEvent.DismissVariants) },
+            sheetState       = variantsSheetState,
+            containerColor   = SheetBg,
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    text     = "Alternatifler",
+                    style    = MaterialTheme.typography.titleSmall,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                state.variants.forEach { variant ->
+                    TextButton(
+                        onClick  = { viewModel.onEvent(NoteEditorEvent.AcceptVariant(variant)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(text = variant, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                Spacer(Modifier.padding(bottom = 16.dp))
             }
         }
     }
@@ -219,17 +245,9 @@ fun NoteEditorScreen(
 // ── Sheet Item ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SheetItem(
-    icon: ImageVector,
-    label: String,
-    tint: Color,
-    onClick: () -> Unit,
-) {
+private fun SheetItem(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier          = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, label, tint = tint, modifier = Modifier.size(20.dp))
@@ -240,76 +258,94 @@ private fun SheetItem(
 
 // ── Text Field ────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NoteTextField(
     value: TextFieldValue,
     ghostText: String,
     realTextLength: Int,
+    aiError: String?,
     onValueChange: (TextFieldValue) -> Unit,
     onAcceptGhost: () -> Unit,
+    onLongPressGhost: () -> Unit,
     focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
-    val raw          = value.text
-    val firstNewline = raw.indexOf('\n')
-    // Divider is always visible once there's a title (non-empty first line)
-    // It sits below the title regardless of whether body exists yet
-    val titleLength  = if (firstNewline == -1) raw.length else firstNewline
-    val showDivider  = titleLength > 0
+    val text          = value.text
+    val firstNewline  = text.indexOf('\n')
+    val titleEnd      = if (firstNewline == -1) text.length else firstNewline
+    val titleFontSize = MaterialTheme.typography.headlineSmall.fontSize
+    val ghostColor    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+
+    val annotated = buildAnnotatedString {
+        if (titleEnd > 0) {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = titleFontSize)) {
+                append(text.substring(0, titleEnd))
+            }
+            append(text.substring(titleEnd))
+        } else {
+            append(text)
+        }
+        if (ghostText.isNotBlank() && value.selection.start == text.length) {
+            withStyle(SpanStyle(color = ghostColor, fontStyle = FontStyle.Italic)) {
+                append(ghostText)
+            }
+        }
+    }
+
+    val displayValue = TextFieldValue(
+        annotatedString = annotated,
+        selection       = value.selection,
+        composition     = value.composition,
+    )
 
     val transformation = remember { MarkdownVisualTransformation() }
 
-    // Build display value with ghost text appended
-    val displayValue = if (ghostText.isNotBlank()) {
-        val ghostAnnotated = buildAnnotatedString {
-            append(value.annotatedString ?: AnnotatedString(raw))
-            pushStyle(SpanStyle(color = Gold.copy(alpha = 0.4f), fontStyle = FontStyle.Italic))
-            append(ghostText)
-            pop()
-        }
-        value.copy(annotatedString = ghostAnnotated)
-    } else value
-
-    BasicTextField(
-        value         = displayValue,
-        onValueChange = { new ->
-            // Strip ghost before passing to VM
-            val stripped = new.text.take(realTextLength.coerceAtMost(new.text.length))
-            if (stripped != raw) {
-                onValueChange(new.copy(text = stripped))
-            }
-        },
-        modifier      = modifier
-            .focusRequester(focusRequester)
-            .onKeyEvent { event ->
-                if (event.key == Key.Tab && ghostText.isNotBlank()) {
-                    onAcceptGhost(); true
-                } else false
-            },
-        textStyle     = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onBackground,
-        ),
-        cursorBrush          = SolidColor(Gold),
-        visualTransformation = transformation,
-        decorationBox = { innerTextField ->
-            Column {
-                Box {
-                    // Placeholder — only when completely empty
-                    if (raw.isEmpty()) {
-                        Text(
-                            text  = "Başlık",
-                            style = MaterialTheme.typography.headlineSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                        )
-                    }
-                    innerTextField()
+    Column(modifier = modifier) {
+        BasicTextField(
+            value         = displayValue,
+            onValueChange = { new ->
+                val strippedText = if (new.text.length > realTextLength + ghostText.length) {
+                    new.text.take(realTextLength) + new.text.drop(realTextLength + ghostText.length)
+                } else {
+                    new.text.take(realTextLength.coerceAtMost(new.text.length))
                 }
+                if (strippedText != text) {
+                    onValueChange(
+                        TextFieldValue(
+                            text        = strippedText,
+                            selection   = TextRange(new.selection.start.coerceAtMost(strippedText.length)),
+                            composition = new.composition,
+                        )
+                    )
+                }
+            },
+            modifier      = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .onKeyEvent { event ->
+                    if (event.key == Key.Tab && ghostText.isNotBlank()) {
+                        onAcceptGhost(); true
+                    } else false
+                },
+            textStyle     = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+            ),
+            cursorBrush   = SolidColor(Gold),
+            decorationBox = { innerTextField ->
+                Column {
+                    Box {
+                        if (text.isEmpty()) {
+                            Text(
+                                text  = "Yazmaya başla...",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            )
+                        }
+                        innerTextField()
+                    }
 
-                // Gold gradient divider — appears as soon as title has content
-                // Stays fixed below the first line, doesn't move with cursor
-                if (showDivider) {
+                    // Gold gradient divider — always visible, sits right below the text field
                     Spacer(Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
@@ -318,18 +354,41 @@ private fun NoteTextField(
                             .background(
                                 Brush.horizontalGradient(
                                     listOf(
-                                        Gold.copy(alpha = 0.6f),
-                                        Gold.copy(alpha = 0.2f),
+                                        Gold.copy(alpha = 0.55f),
+                                        Gold.copy(alpha = 0.12f),
                                         Color.Transparent,
                                     )
                                 )
                             )
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                 }
-            }
-        },
-    )
+            },
+        )
+
+        if (ghostText.isNotBlank() && value.selection.start == text.length) {
+            Text(
+                text     = "↵ kabul et  •  basılı tut → alternatifler",
+                style    = MaterialTheme.typography.labelSmall.copy(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                ),
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .combinedClickable(onClick = {}, onLongClick = onLongPressGhost),
+            )
+        }
+
+        if (aiError != null) {
+            Text(
+                text     = aiError,
+                style    = MaterialTheme.typography.bodySmall.copy(
+                    color     = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    fontStyle = FontStyle.Italic,
+                ),
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
 }
 
 // ── Markdown Visual Transformation ────────────────────────────────────────────
@@ -400,19 +459,11 @@ private class MarkdownVisualTransformation : VisualTransformation {
 
             if (lineIndex == 0) {
                 if (line.isNotEmpty()) {
-                    result += Segment.Visible(
-                        rawStart = lineStart,
-                        rawEnd   = lineStart + line.length,
-                        style    = SpanStyle(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize   = TextUnit(24f, TextUnitType.Sp),
-                        ),
-                    )
+                    result += Segment.Visible(lineStart, lineStart + line.length)
                 }
             } else {
                 val headingMatch = Regex("""^(#{1,3}) """).find(line)
                 val isBullet     = line.startsWith("- ")
-
                 when {
                     headingMatch != null -> {
                         val prefixLen = headingMatch.value.length
@@ -422,13 +473,9 @@ private class MarkdownVisualTransformation : VisualTransformation {
                             else -> TextUnit(18f, TextUnitType.Sp)
                         }
                         result += Segment.Hidden(lineStart, lineStart + prefixLen)
-                        if (prefixLen < line.length) {
-                            result += Segment.Visible(
-                                rawStart = lineStart + prefixLen,
-                                rawEnd   = lineStart + line.length,
-                                style    = SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs),
-                            )
-                        }
+                        if (prefixLen < line.length)
+                            result += Segment.Visible(lineStart + prefixLen, lineStart + line.length,
+                                SpanStyle(fontWeight = FontWeight.Bold, fontSize = fs))
                     }
                     isBullet -> {
                         result += Segment.Hidden(lineStart, lineStart + 2)
@@ -451,54 +498,33 @@ private class MarkdownVisualTransformation : VisualTransformation {
     private val boldRe      = Regex("""\*\*(.*?)\*\*""")
     private val italicRe    = Regex("""(?<!_)_(?!_)(.*?)(?<!_)_(?!_)""")
 
-    private fun parseInline(
-        raw: String,
-        regionStart: Int,
-        regionEnd: Int,
-        out: MutableList<Segment>,
-    ) {
+    private fun parseInline(raw: String, regionStart: Int, regionEnd: Int, out: MutableList<Segment>) {
         if (regionStart >= regionEnd) return
         val slice = raw.substring(regionStart, regionEnd)
-
-        data class Span(
-            val start: Int, val end: Int,
-            val innerStart: Int, val innerEnd: Int,
-            val style: SpanStyle,
-        )
-
+        data class Span(val start: Int, val end: Int, val innerStart: Int, val innerEnd: Int, val style: SpanStyle)
         val spans = mutableListOf<Span>()
-
         underlineRe.findAll(slice).forEach { m ->
-            spans += Span(m.range.first, m.range.last + 1,
-                m.range.first + 2, m.range.last - 1,
-                SpanStyle(textDecoration = TextDecoration.Underline))
+            spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1, SpanStyle(textDecoration = TextDecoration.Underline))
         }
         boldRe.findAll(slice).forEach { m ->
             if (spans.none { s -> m.range.first in s.start until s.end })
-                spans += Span(m.range.first, m.range.last + 1,
-                    m.range.first + 2, m.range.last - 1,
-                    SpanStyle(fontWeight = FontWeight.Bold))
+                spans += Span(m.range.first, m.range.last + 1, m.range.first + 2, m.range.last - 1, SpanStyle(fontWeight = FontWeight.Bold))
         }
         italicRe.findAll(slice).forEach { m ->
             if (spans.none { s -> m.range.first in s.start until s.end })
-                spans += Span(m.range.first, m.range.last + 1,
-                    m.range.first + 1, m.range.last,
-                    SpanStyle(fontStyle = FontStyle.Italic))
+                spans += Span(m.range.first, m.range.last + 1, m.range.first + 1, m.range.last, SpanStyle(fontStyle = FontStyle.Italic))
         }
-
         spans.sortBy { it.start }
         var cursor = 0
         for (span in spans) {
-            if (span.start > cursor)
-                out += Segment.Visible(regionStart + cursor, regionStart + span.start)
+            if (span.start > cursor) out += Segment.Visible(regionStart + cursor, regionStart + span.start)
             out += Segment.Hidden(regionStart + span.start, regionStart + span.innerStart)
             if (span.innerStart < span.innerEnd)
                 out += Segment.Visible(regionStart + span.innerStart, regionStart + span.innerEnd, span.style)
             out += Segment.Hidden(regionStart + span.innerEnd, regionStart + span.end)
             cursor = span.end
         }
-        if (cursor < slice.length)
-            out += Segment.Visible(regionStart + cursor, regionEnd)
+        if (cursor < slice.length) out += Segment.Visible(regionStart + cursor, regionEnd)
     }
 }
 
@@ -522,11 +548,7 @@ private fun FormattingToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .background(
-                Brush.verticalGradient(
-                    listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f))
-                )
-            ),
+            .background(Brush.verticalGradient(listOf(GlassBase.copy(alpha = 0.92f), GlassBase.copy(alpha = 0.98f)))),
     ) {
         HorizontalDivider(color = GlassBorder, thickness = 0.5.dp)
         Row(
@@ -536,15 +558,11 @@ private fun FormattingToolbar(
             ToolbarButton(Lucide.Bold,      "Kalın",       onBold)
             ToolbarButton(Lucide.Italic,    "İtalik",      onItalic)
             ToolbarButton(Lucide.Underline, "Altı çizili", onUnderline)
-
             Box {
                 IconButton(onClick = { headingMenuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        Lucide.Heading2, "Başlık",
-                        tint     = if (headingMenuExpanded) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    Icon(Lucide.Heading2, "Başlık",
+                        tint     = if (headingMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp))
                 }
                 StillDropdownMenu(expanded = headingMenuExpanded, onDismissRequest = { headingMenuExpanded = false }) {
                     listOf("H1" to 1, "H2" to 2, "H3" to 3).forEach { (label, level) ->
@@ -552,43 +570,48 @@ private fun FormattingToolbar(
                     }
                 }
             }
-
-            ToolbarButton(Lucide.List, "Liste", onBullet)
+            ToolbarButton(Lucide.List,  "Liste",   onBullet)
             Spacer(Modifier.weight(1f))
-
-            // Tab / Accept button — only visible when ghost text is present
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showAccept,
-                enter   = androidx.compose.animation.expandHorizontally() +
-                          androidx.compose.animation.fadeIn(),
-                exit    = androidx.compose.animation.shrinkHorizontally() +
-                          androidx.compose.animation.fadeOut(),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .height(32.dp)
-                        .background(
-                            Brush.horizontalGradient(listOf(Color(0xFFD4B97A), Gold)),
-                            RoundedCornerShape(50),
-                        )
-                        .clickable(onClick = onAcceptGhost)
-                        .padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text  = "Tab ↵",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color      = Color(0xFF1A1208),
-                        ),
-                    )
-                }
+            if (showAccept) {
+                AcceptButton(onClick = onAcceptGhost)
             }
-
             ToolbarButton(Lucide.Undo2, "Geri al", onUndo)
             ToolbarButton(Lucide.Redo2, "Yinele",  onRedo)
             Spacer(Modifier.width(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun AcceptButton(onClick: () -> Unit) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = true,
+        enter   = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(180)) +
+                  androidx.compose.animation.expandHorizontally(androidx.compose.animation.core.tween(180)),
+        exit    = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) +
+                  androidx.compose.animation.shrinkHorizontally(androidx.compose.animation.core.tween(120)),
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(end = 6.dp)
+                .height(32.dp)
+                .clip(CircleShape)
+                .background(Brush.horizontalGradient(listOf(Color(0xFFD4B97A), Gold)))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication        = null,
+                    onClick           = onClick,
+                )
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text  = "Onayla",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color      = Color(0xFF1A1208),
+                ),
+            )
         }
     }
 }
