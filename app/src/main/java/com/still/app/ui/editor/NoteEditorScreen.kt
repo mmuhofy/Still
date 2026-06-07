@@ -273,56 +273,124 @@ private fun NoteTextField(
 ) {
     val text          = value.text
     val firstNewline  = text.indexOf('\n')
-    val titleEnd      = if (firstNewline == -1) text.length else firstNewline
+    val titleText     = if (firstNewline == -1) text else text.substring(0, firstNewline)
+    val bodyText      = if (firstNewline == -1) "" else text.substring(firstNewline + 1)
     val titleFontSize = MaterialTheme.typography.headlineSmall.fontSize
     val ghostColor    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-
-    val annotated = buildAnnotatedString {
-        if (titleEnd > 0) {
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = titleFontSize)) {
-                append(text.substring(0, titleEnd))
-            }
-            append(text.substring(titleEnd))
-        } else {
-            append(text)
-        }
-        if (ghostText.isNotBlank() && value.selection.start == text.length) {
-            withStyle(SpanStyle(color = ghostColor, fontStyle = FontStyle.Italic)) {
-                append(ghostText)
-            }
-        }
-    }
-
-    val displayValue = TextFieldValue(
-        annotatedString = annotated,
-        selection       = value.selection,
-        composition     = value.composition,
-    )
-
+    val bodyFocusRequester = remember { FocusRequester() }
     val transformation = remember { MarkdownVisualTransformation() }
 
     Column(modifier = modifier) {
+
+        // ── Title field ───────────────────────────────────────────────────────
+        val titleAnnotated = buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = titleFontSize)) {
+                append(titleText)
+            }
+        }
+        val titleTfv = TextFieldValue(
+            annotatedString = titleAnnotated,
+            selection = androidx.compose.ui.text.TextRange(
+                value.selection.start.coerceIn(0, titleText.length),
+                value.selection.end.coerceIn(0, titleText.length),
+            ),
+        )
+
         BasicTextField(
-            value         = displayValue,
+            value         = titleTfv,
             onValueChange = { new ->
-                val strippedText = if (new.text.length > realTextLength + ghostText.length) {
-                    new.text.take(realTextLength) + new.text.drop(realTextLength + ghostText.length)
-                } else {
-                    new.text.take(realTextLength.coerceAtMost(new.text.length))
+                // Enter in title → move cursor to body
+                if (new.text.contains('\n')) {
+                    val cleaned = new.text.replace("\n", "")
+                    val newRaw  = if (bodyText.isEmpty()) "$cleaned\n" else "$cleaned\n$bodyText"
+                    onValueChange(value.copy(text = newRaw,
+                        selection = androidx.compose.ui.text.TextRange(newRaw.length)))
+                    bodyFocusRequester.requestFocus()
+                    return@BasicTextField
                 }
-                if (strippedText != text) {
-                    onValueChange(
-                        TextFieldValue(
-                            text        = strippedText,
-                            selection   = TextRange(new.selection.start.coerceAtMost(strippedText.length)),
-                            composition = new.composition,
+                val newRaw = if (bodyText.isEmpty()) new.text else "${new.text}\n$bodyText"
+                onValueChange(value.copy(
+                    text      = newRaw,
+                    selection = androidx.compose.ui.text.TextRange(
+                        new.selection.start.coerceAtMost(newRaw.length)
+                    ),
+                ))
+            },
+            modifier      = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+            textStyle     = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                color      = MaterialTheme.colorScheme.onBackground,
+            ),
+            cursorBrush   = SolidColor(Gold),
+            singleLine    = false,
+            decorationBox = { inner ->
+                Box {
+                    if (titleText.isEmpty() && bodyText.isEmpty()) {
+                        Text(
+                            text  = "Başlık",
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                         )
+                    }
+                    inner()
+                }
+            },
+        )
+
+        // ── Gold gradient divider — always visible ────────────────────────────
+        Spacer(Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Gold.copy(alpha = 0.55f), Gold.copy(alpha = 0.12f), Color.Transparent)
                     )
+                )
+        )
+        Spacer(Modifier.height(12.dp))
+
+        // ── Body field ────────────────────────────────────────────────────────
+        val bodyAnnotated = buildAnnotatedString {
+            append(bodyText)
+            if (ghostText.isNotBlank()) {
+                withStyle(SpanStyle(color = ghostColor, fontStyle = FontStyle.Italic)) {
+                    append(ghostText)
+                }
+            }
+        }
+        val bodySelection = androidx.compose.ui.text.TextRange(
+            (value.selection.start - (firstNewline + 1)).coerceIn(0, bodyText.length),
+            (value.selection.end   - (firstNewline + 1)).coerceIn(0, bodyText.length),
+        )
+        val bodyTfv = TextFieldValue(
+            annotatedString = bodyAnnotated,
+            selection       = bodySelection,
+        )
+
+        BasicTextField(
+            value         = bodyTfv,
+            onValueChange = { new ->
+                // Strip ghost
+                val realBody = new.text.take(bodyText.length.coerceAtMost(new.text.length)
+                    .let { if (new.text.length > bodyText.length + ghostText.length) bodyText.length else it })
+                val newRaw   = "$titleText\n$realBody"
+                if (realBody != bodyText) {
+                    val offset = titleText.length + 1
+                    onValueChange(value.copy(
+                        text      = newRaw,
+                        selection = androidx.compose.ui.text.TextRange(
+                            (new.selection.start + offset).coerceAtMost(newRaw.length)
+                        ),
+                    ))
                 }
             },
             modifier      = Modifier
                 .fillMaxWidth()
-                .focusRequester(focusRequester)
+                .focusRequester(bodyFocusRequester)
                 .onKeyEvent { event ->
                     if (event.key == Key.Tab && ghostText.isNotBlank()) {
                         onAcceptGhost(); true
@@ -331,42 +399,23 @@ private fun NoteTextField(
             textStyle     = MaterialTheme.typography.bodyLarge.copy(
                 color = MaterialTheme.colorScheme.onBackground,
             ),
-            cursorBrush   = SolidColor(Gold),
-            decorationBox = { innerTextField ->
-                Column {
-                    Box {
-                        if (text.isEmpty()) {
-                            Text(
-                                text  = "Yazmaya başla...",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            )
-                        }
-                        innerTextField()
+            cursorBrush          = SolidColor(Gold),
+            visualTransformation = transformation,
+            decorationBox = { inner ->
+                Box {
+                    if (bodyText.isEmpty()) {
+                        Text(
+                            text  = "Yazmaya başla...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        )
                     }
-
-                    // Gold gradient divider — always visible, sits right below the text field
-                    Spacer(Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Gold.copy(alpha = 0.55f),
-                                        Gold.copy(alpha = 0.12f),
-                                        Color.Transparent,
-                                    )
-                                )
-                            )
-                    )
-                    Spacer(Modifier.height(10.dp))
+                    inner()
                 }
             },
         )
 
-        if (ghostText.isNotBlank() && value.selection.start == text.length) {
+        if (ghostText.isNotBlank()) {
             Text(
                 text     = "↵ kabul et  •  basılı tut → alternatifler",
                 style    = MaterialTheme.typography.labelSmall.copy(
