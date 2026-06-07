@@ -374,19 +374,19 @@ private fun NoteTextField(
         BasicTextField(
             value         = bodyTfv,
             onValueChange = { new ->
-                // Strip ghost
-                val realBody = new.text.take(bodyText.length.coerceAtMost(new.text.length)
-                    .let { if (new.text.length > bodyText.length + ghostText.length) bodyText.length else it })
-                val newRaw   = "$titleText\n$realBody"
-                if (realBody != bodyText) {
-                    val offset = titleText.length + 1
-                    onValueChange(value.copy(
-                        text      = newRaw,
-                        selection = androidx.compose.ui.text.TextRange(
-                            (new.selection.start + offset).coerceAtMost(newRaw.length)
-                        ),
-                    ))
-                }
+                // Strip ghost suffix — ghost is appended for display only
+                val realBody = if (ghostText.isNotBlank() && new.text.length > bodyText.length)
+                    new.text.take(bodyText.length)
+                else
+                    new.text
+                val newRaw = "$titleText\n$realBody"
+                val offset = titleText.length + 1
+                onValueChange(value.copy(
+                    text      = newRaw,
+                    selection = androidx.compose.ui.text.TextRange(
+                        (new.selection.start + offset).coerceAtMost(newRaw.length)
+                    ),
+                ))
             },
             modifier      = Modifier
                 .fillMaxWidth()
