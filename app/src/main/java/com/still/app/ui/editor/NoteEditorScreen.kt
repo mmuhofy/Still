@@ -79,6 +79,7 @@ import com.composables.icons.lucide.Redo2
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Underline
 import com.composables.icons.lucide.Undo2
+import com.composables.icons.lucide.Maximize
 import com.still.app.ui.components.StillDropdownMenu
 import com.still.app.ui.components.StillDropdownMenuItem
 import kotlinx.coroutines.delay
@@ -611,7 +612,7 @@ private fun FormattingToolbar(
 
             // Focus mode toggle button — gold tint when active
             ToolbarButton(
-                icon    = Lucide.Minimize2,
+                icon    = Lucide.Maximize,
                 label   = "Odak modu",
                 onClick = onFocusMode,
                 tint    = if (isFocusMode) MaterialTheme.colorScheme.primary
