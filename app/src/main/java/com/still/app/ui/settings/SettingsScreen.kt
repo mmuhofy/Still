@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.AlignLeft
+import com.composables.icons.lucide.ScrollText
 import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Focus
@@ -158,7 +158,7 @@ fun SettingsScreen(
 
                 // Typewriter mode — Phase 2, not yet implemented
                 SettingsSwitchRow(
-                    icon = Lucide.AlignLeft,
+                    icon = Lucide.ScrollText,
                     label = "Daktilo modu",
                     description = "Aktif satırı ortada tut",
                     checked = uiState.typewriterModeEnabled,
