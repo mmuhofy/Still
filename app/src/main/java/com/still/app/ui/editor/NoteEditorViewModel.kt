@@ -5,6 +5,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -50,6 +51,8 @@ data class NoteEditorUiState(
     val aiError: String? = null,
     val showVariants: Boolean = false,
     val variants: List<String> = emptyList(),
+    // Focus mode: read from DataStore, toggled by user tap in editor
+    val isFocusMode: Boolean = false,
 )
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -71,6 +74,8 @@ sealed interface NoteEditorEvent {
     data object RequestVariants : NoteEditorEvent
     data class AcceptVariant(val text: String) : NoteEditorEvent
     data object DismissVariants : NoteEditorEvent
+    // Toggle focus mode on/off — also persists to DataStore
+    data object ToggleFocusMode : NoteEditorEvent
 }
 
 @HiltViewModel
@@ -91,8 +96,11 @@ class NoteEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(NoteEditorUiState(noteId = noteId))
     val uiState = _uiState.asStateFlow()
 
+    private val aiEnabledKey    = booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)
+    private val focusModeKey    = booleanPreferencesKey(Constants.PrefKeys.FOCUS_MODE_ENABLED)
+
     private val aiEnabledFlow = dataStore.data
-        .map { it[booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)] ?: false }
+        .map { it[aiEnabledKey] ?: false }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val aiEnabled get() = aiEnabledFlow.value
@@ -106,6 +114,13 @@ class NoteEditorViewModel @Inject constructor(
     private val MAX_STACK = 100
 
     init {
+        // Observe focus mode setting from DataStore
+        dataStore.data
+            .map { it[focusModeKey] ?: false }
+            .distinctUntilChanged()
+            .onEach { enabled -> _uiState.update { it.copy(isFocusMode = enabled) } }
+            .launchIn(viewModelScope)
+
         if (noteId == -1L) {
             _uiState.update { it.copy(isLoading = false) }
         } else {
@@ -217,7 +232,6 @@ class NoteEditorViewModel @Inject constructor(
             NoteEditorEvent.ApplyItalic    -> applyInlineFormat("_")
             NoteEditorEvent.ApplyUnderline -> applyInlineFormat("__")
 
-            // H1 = "# ", H2 = "## ", H3 = "### "
             is NoteEditorEvent.ApplyHeading -> {
                 val prefix = "#".repeat(event.level.coerceIn(1, 3)) + " "
                 applyLinePrefix(prefix)
@@ -271,6 +285,16 @@ class NoteEditorViewModel @Inject constructor(
 
             NoteEditorEvent.DismissVariants -> {
                 _uiState.update { it.copy(showVariants = false, variants = emptyList()) }
+            }
+
+            // Toggle focus mode and persist to DataStore
+            NoteEditorEvent.ToggleFocusMode -> {
+                val newValue = !_uiState.value.isFocusMode
+                viewModelScope.launch {
+                    dataStore.edit { prefs -> prefs[focusModeKey] = newValue }
+                }
+                // Optimistic update — DataStore observer will confirm
+                _uiState.update { it.copy(isFocusMode = newValue) }
             }
         }
     }
@@ -443,8 +467,6 @@ class NoteEditorViewModel @Inject constructor(
 
         val lineStart = text.lastIndexOf('\n', cursor - 1) + 1
 
-        // If line already has this exact prefix, remove it
-        // If line has a DIFFERENT heading prefix, replace it
         val existingHeadingRegex = Regex("""^#{1,3} """)
         val existingMatch = existingHeadingRegex.find(text.substring(lineStart))
 
@@ -453,18 +475,15 @@ class NoteEditorViewModel @Inject constructor(
 
         when {
             text.startsWith(prefix, lineStart) -> {
-                // Toggle off — same prefix already present
                 newText   = text.substring(0, lineStart) + text.substring(lineStart + prefix.length)
                 newCursor = (cursor - prefix.length).coerceAtLeast(lineStart)
             }
             existingMatch != null && prefix.matches(Regex("""#{1,3} """)) -> {
-                // Replace existing heading level with new one
                 val oldPrefix = existingMatch.value
                 newText   = text.substring(0, lineStart) + prefix + text.substring(lineStart + oldPrefix.length)
                 newCursor = cursor + (prefix.length - oldPrefix.length)
             }
             else -> {
-                // Add prefix
                 newText   = text.substring(0, lineStart) + prefix + text.substring(lineStart)
                 newCursor = cursor + prefix.length
             }

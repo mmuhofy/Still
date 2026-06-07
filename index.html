@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitRaw – Minimal Link Finder</title>
+    <style>
+        :root {
+            --bg: #0b0f19;
+            --surface: #151b2c;
+            --border: rgba(255, 255, 255, 0.06);
+            --text-main: #f3f4f6;
+            --text-muted: #6b7280;
+            --accent: #38bdf8;
+            --accent-dim: rgba(56, 189, 248, 0.1);
+            --danger: #f87171;
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .wrapper {
+            width: 100%;
+            max-width: 800px;
+            margin-top: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .grid-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        @media (min-width: 640px) {
+            .grid-inputs {
+                flex-direction: row;
+                align-items: flex-end;
+            }
+            .flex-grow { flex-grow: 1; }
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input, select {
+            width: 100%;
+            height: 44px;
+            padding: 0 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+
+        button {
+            height: 44px;
+            padding: 0 1.5rem;
+            background: var(--text-main);
+            color: var(--bg);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .search-container {
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .search-container input {
+            background: var(--surface);
+            border: 1px solid var(--border);
+        }
+
+        .error-msg {
+            color: var(--danger);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .loading-spy {
+            text-align: center;
+            color: var(--accent);
+            font-size: 0.9rem;
+            display: none;
+            padding: 1rem;
+        }
+
+        /* Liste Elemanları */
+        .links-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .link-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .link-item:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        @media (min-width: 640px) {
+            .link-item {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                gap: 2rem;
+            }
+        }
+
+        .file-info {
+            min-width: 0; /* Text truncation için şart */
+        }
+
+        .file-name {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-url {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-top: 0.2rem;
+        }
+
+        .file-url a {
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        .file-url a:hover {
+            color: var(--accent);
+        }
+
+        .action-area {
+            display: flex;
+            align-items: center;
+        }
+
+        .mini-btn {
+            height: 32px;
+            padding: 0 1rem;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+
+        .mini-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <header>
+        <h1>GitRaw</h1>
+        <p>Gereksiz dosyalardan arındırılmış temiz raw bağlantıları</p>
+    </header>
+
+    <div class="card" id="token-card">
+        <div class="grid-inputs">
+            <div class="input-group flex-grow">
+                <label for="token">GitHub Access Token</label>
+                <input type="password" id="token" placeholder="ghp_..." autocomplete="off">
+            </div>
+            <button onclick="loadRepositories()">Bağlan</button>
+        </div>
+        <div id="token-error" class="error-msg">Token geçersiz veya yetkisiz.</div>
+    </div>
+
+    <div class="card" id="repo-card" style="display: none;">
+        <div class="grid-inputs">
+            <div class="input-group flex-grow">
+                <label for="repos">Depo Seçimi</label>
+                <select id="repos"></select>
+            </div>
+            <button onclick="fetchRawLinks()">Dosyaları Getir</button>
+        </div>
+    </div>
+
+    <div id="loader" class="loading-spy">İşleniyor...</div>
+
+    <div class="search-container" id="search-box">
+        <input type="text" id="filter-input" placeholder="Dosya adı veya uzantıya göre canlı ara... (.js, index vb.)" oninput="liveFilter()">
+    </div>
+
+    <div class="links-list" id="links-container"></div>
+</div>
+
+<script>
+    let currentUser = "";
+
+    // Filtre listesi (Build, cache ve gereksiz configler hariç tutulur)
+    const excludedPatterns = [
+        '.git/', 'node_modules/', 'build/', '.gradle/', '.idea/', 
+        '.vscode/', 'bin/', 'obj/', 'dist/', 'target/', 'out/',
+        '.gcopy', '.metadata/', '.settings/', '.cache/', 'yarn.lock', 'package-lock.json'
+    ];
+
+    async function githubFetch(url, token) {
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        });
+        if (!response.ok) throw new Error('Status: ' + response.status);
+        return response.json();
+    }
+
+    async function loadRepositories() {
+        const token = document.getElementById('token').value.trim();
+        const errorDiv = document.getElementById('token-error');
+        const repoCard = document.getElementById('repo-card');
+        const loader = document.getElementById('loader');
+
+        if (!token) return;
+
+        errorDiv.style.display = 'none';
+        loader.style.display = 'block';
+        repoCard.style.display = 'none';
+
+        try {
+            const userCtx = await githubFetch('https://api.github.com/user', token);
+            currentUser = userCtx.login;
+
+            const repos = await githubFetch('https://api.github.com/user/repos?per_page=100&sort=updated', token);
+            const select = document.getElementById('repos');
+            select.innerHTML = '';
+
+            repos.forEach(repo => {
+                const option = document.createElement('option');
+                option.value = repo.name;
+                option.dataset.branch = repo.default_branch;
+                option.textContent = repo.name;
+                select.appendChild(option);
+            });
+
+            document.getElementById('token-card').style.marginBottom = '1rem';
+            repoCard.style.display = 'block';
+        } catch (err) {
+            errorDiv.style.display = 'block';
+            console.error(err);
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+    async function fetchRawLinks() {
+        const token = document.getElementById('token').value.trim();
+        const repoSelect = document.getElementById('repos');
+        const selectedOption = repoSelect.options[repoSelect.selectedIndex];
+        
+        if (!selectedOption) return;
+
+        const repoName = selectedOption.value;
+        const defaultBranch = selectedOption.dataset.branch;
+        const loader = document.getElementById('loader');
+        const container = document.getElementById('links-container');
+        const searchBox = document.getElementById('search-box');
+
+        loader.style.display = 'block';
+        container.innerHTML = '';
+        searchBox.style.display = 'none';
+        document.getElementById('filter-input').value = '';
+
+        try {
+            const treeData = await githubFetch(`https://api.github.com/repos/${currentUser}/${repoName}/git/trees/${defaultBranch}?recursive=1`, token);
+            
+            if (!treeData.tree) return;
+
+            let fileFound = false;
+
+            treeData.tree.forEach(item => {
+                if (item.type !== 'blob') return;
+
+                const shouldExclude = excludedPatterns.some(pattern => item.path.includes(pattern));
+                if (shouldExclude) return;
+
+                fileFound = true;
+                const rawUrl = `https://raw.githubusercontent.com/${currentUser}/${repoName}/refs/heads/${defaultBranch}/${item.path}`;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'link-item';
+                itemDiv.dataset.path = item.path.toLowerCase(); // Arama için optimize
+                
+                itemDiv.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-name" title="${item.path}">${item.path}</div>
+                        <div class="file-url"><a href="${rawUrl}" target="_blank">${rawUrl}</a></div>
+                    </div>
+                    <div class="action-area">
+                        <button class="mini-btn" onclick="copyToClipboard('${rawUrl}', this)">Kopyala</button>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
+
+            if (fileFound) {
+                searchBox.style.display = 'block';
+            } else {
+                container.innerHTML = `<div style="text-align:center; color:var(--text-muted); padding:2rem;">Filtrelere takılmayan dosya bulunamadı.</div>`;
+            }
+
+        } catch (err) {
+            alert('Dosya listesi alınırken bir hata oluştu.');
+            console.error(err);
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+    function liveFilter() {
+        const query = document.getElementById('filter-input').value.toLowerCase().trim();
+        const items = document.querySelectorAll('.link-item');
+
+        items.forEach(item => {
+            const filePath = item.dataset.path;
+            if (filePath.includes(query)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+
+    function copyToClipboard(text, button) {
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = button.textContent;
+            button.textContent = 'Kopyalandı!';
+            button.style.borderColor = 'var(--accent)';
+            button.style.color = 'var(--accent)';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.borderColor = 'var(--border)';
+                button.style.color = 'var(--text-main)';
+            }, 1200);
+        });
+    }
+</script>
+
+</body>
+</html>
