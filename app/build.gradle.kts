@@ -32,6 +32,12 @@ android {
             "GEMINI_API_KEY",
             "\"${localProps.getProperty("gemini.api.key", "")}\""
         )
+
+        buildConfigField(
+            "String",
+            "GOOGLE_CLIENT_ID",
+            "\"${localProps.getProperty("google.client.id", "")}\""
+        )
     }
 
     room {
@@ -67,6 +73,26 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Required to avoid duplicate class errors from Google API client transitive deps
+    // UNTESTED — verify before use
+    configurations.all {
+        resolutionStrategy {
+            force("com.google.guava:guava:33.2.1-android")
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -78,7 +104,7 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-    implementation(libs.compose.ui.google.fonts)   // Inter + Lora
+    implementation(libs.compose.ui.google.fonts)
     implementation(libs.activity.compose)
 
     // Lucide icons
@@ -102,6 +128,16 @@ dependencies {
     implementation(libs.appcompat)
 
     implementation(libs.coroutines.android)
+
+    // Google Sign-In (Credential Manager)
+    implementation(libs.credential.manager)
+    implementation(libs.credential.manager.play)
+    implementation(libs.google.id.credential)
+
+    // Google Drive REST API
+    implementation(libs.google.api.client.android)
+    implementation(libs.google.api.services.drive)
+    implementation(libs.google.auth.library)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

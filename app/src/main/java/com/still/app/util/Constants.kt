@@ -41,5 +41,8 @@ object Constants {
         const val AI_ENABLED = "ai_enabled"
         const val FOCUS_MODE_ENABLED = "focus_mode_enabled"
         const val TYPEWRITER_MODE_ENABLED = "typewriter_mode_enabled"
+        const val DRIVE_SYNC_ENABLED = "drive_sync_enabled"
+        const val DRIVE_ACCOUNT_EMAIL = "drive_account_email"
+        const val DRIVE_LAST_SYNC_MS = "drive_last_sync_ms"
     }
 }
