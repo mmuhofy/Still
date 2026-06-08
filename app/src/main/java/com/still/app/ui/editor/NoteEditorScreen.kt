@@ -283,7 +283,7 @@ fun NoteEditorScreen(
                 )
 
                 SheetItem(
-                    icon  = if (state.isFocusMode) Lucide.Minimize else Lucide.Focus,
+                    icon  = Lucide.Maximize,
                     label = if (state.isFocusMode) "Odak modundan çık" else "Odak modu",
                     tint  = MaterialTheme.colorScheme.onSurface,
                     onClick = {
@@ -620,15 +620,6 @@ private fun FormattingToolbar(
             ToolbarButton(icon = Lucide.List, label = "Liste", onClick = onBullet)
 
             Spacer(Modifier.weight(1f))
-
-            // Focus mode toggle button — gold tint when active
-            ToolbarButton(
-                icon    = Lucide.Minimize2,
-                label   = "Odak modu",
-                onClick = onFocusMode,
-                tint    = if (isFocusMode) MaterialTheme.colorScheme.primary
-                          else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
 
             ToolbarButton(icon = Lucide.Undo2, label = "Geri al", onClick = onUndo)
             ToolbarButton(icon = Lucide.Redo2, label = "Yinele",  onClick = onRedo)
