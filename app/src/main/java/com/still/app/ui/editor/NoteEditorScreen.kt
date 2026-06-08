@@ -79,7 +79,6 @@ import com.composables.icons.lucide.Redo2
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Underline
 import com.composables.icons.lucide.Undo2
-import com.composables.icons.lucide.Maximize
 import com.still.app.ui.components.StillDropdownMenu
 import com.still.app.ui.components.StillDropdownMenuItem
 import kotlinx.coroutines.delay
@@ -170,7 +169,7 @@ fun NoteEditorScreen(
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                        .clickable { onBack() },
+                        .clickable { viewModel.onEvent(NoteEditorEvent.ToggleFocusMode) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -221,8 +220,6 @@ fun NoteEditorScreen(
                     onBullet      = { viewModel.onEvent(NoteEditorEvent.ApplyBullet) },
                     onUndo        = { viewModel.onEvent(NoteEditorEvent.Undo) },
                     onRedo        = { viewModel.onEvent(NoteEditorEvent.Redo) },
-                    onFocusMode   = { viewModel.onEvent(NoteEditorEvent.ToggleFocusMode) },
-                    isFocusMode   = state.isFocusMode,
                 )
             },
         ) { innerPadding ->
@@ -276,6 +273,22 @@ fun NoteEditorScreen(
                     onClick = {
                         viewModel.onEvent(NoteEditorEvent.TogglePin)
                         showSheet = false
+                    },
+                )
+
+                HorizontalDivider(
+                    modifier  = Modifier.padding(horizontal = 20.dp),
+                    color     = SheetBorder,
+                    thickness = 0.5.dp,
+                )
+
+                SheetItem(
+                    icon  = if (state.isFocusMode) Lucide.Minimize else Lucide.Focus,
+                    label = if (state.isFocusMode) "Odak modundan çık" else "Odak modu",
+                    tint  = MaterialTheme.colorScheme.onSurface,
+                    onClick = {
+                        showSheet = false
+                        viewModel.onEvent(NoteEditorEvent.ToggleFocusMode)
                     },
                 )
 
@@ -548,8 +561,6 @@ private fun FormattingToolbar(
     onBullet: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
-    onFocusMode: () -> Unit,
-    isFocusMode: Boolean,
 ) {
     var headingMenuExpanded by remember { mutableStateOf(false) }
 
@@ -612,7 +623,7 @@ private fun FormattingToolbar(
 
             // Focus mode toggle button — gold tint when active
             ToolbarButton(
-                icon    = Lucide.Maximize,
+                icon    = Lucide.Minimize2,
                 label   = "Odak modu",
                 onClick = onFocusMode,
                 tint    = if (isFocusMode) MaterialTheme.colorScheme.primary
