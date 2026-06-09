@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.AlignJustify
 import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudUpload
@@ -205,7 +204,8 @@ fun SettingsScreen(
                 }
 
                 // Error message if any
-                if (uiState.driveError != null) {
+                val driveError = uiState.driveError
+                if (driveError != null) {
                     SettingsGroupDivider()
                     Row(
                         modifier = Modifier
@@ -214,7 +214,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = uiState.driveError,
+                            text = driveError,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.weight(1f),
