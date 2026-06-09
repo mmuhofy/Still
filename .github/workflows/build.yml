@@ -39,6 +39,7 @@ jobs:
       - name: Inject secrets into local.properties
         run: |
           echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
+          echo "google.client.id=${{ secrets.GOOGLE_CLIENT_ID }}" >> local.properties
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
@@ -52,4 +53,3 @@ jobs:
           name: still-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/**.apk
           retention-days: 7
-          
