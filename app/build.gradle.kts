@@ -45,7 +45,19 @@ android {
         schemaDirectory("$projectDir/schemas")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/still-release.jks")
+            storePassword = localProps.getProperty("keystore.password", "")
+            keyAlias = localProps.getProperty("key.alias", "still")
+            keyPassword = localProps.getProperty("key.password", "")
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug") // uses ~/.android/debug.keystore
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

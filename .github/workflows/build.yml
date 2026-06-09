@@ -40,6 +40,14 @@ jobs:
         run: |
           echo "gemini.api.key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
           echo "google.client.id=${{ secrets.GOOGLE_CLIENT_ID }}" >> local.properties
+          echo "keystore.password=${{ secrets.KEYSTORE_PASSWORD }}" >> local.properties
+          echo "key.alias=${{ secrets.KEY_ALIAS }}" >> local.properties
+          echo "key.password=${{ secrets.KEY_PASSWORD }}" >> local.properties
+
+      - name: Decode keystore
+        run: |
+          mkdir -p app/keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore/still-release.jks
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
