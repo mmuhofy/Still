@@ -1,6 +1,9 @@
 package com.still.app.ui.settings
 
 import android.content.Context
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -9,6 +12,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.still.app.BuildConfig
 import com.still.app.domain.repository.DriveRepository
 import com.still.app.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,9 +66,9 @@ sealed interface SettingsEvent {
     data class SetAiEnabled(val enabled: Boolean) : SettingsEvent
     data class SetFocusMode(val enabled: Boolean) : SettingsEvent
     data class SetTypewriterMode(val enabled: Boolean) : SettingsEvent
-    // Drive
-    data class SetDriveSyncEnabled(val enabled: Boolean) : SettingsEvent
-    data object SignInDrive : SettingsEvent
+    // Drive — sign-in is called from UI with activity context, result passed here
+    data class SignInDriveResult(val email: String) : SettingsEvent
+    data object SignInDrive : SettingsEvent  // triggers UI-level credential request
     data object SignOutDrive : SettingsEvent
     data object SyncNow : SettingsEvent
     data object DismissDriveError : SettingsEvent
@@ -146,18 +152,15 @@ class SettingsViewModel @Inject constructor(
                 is SettingsEvent.SetDriveSyncEnabled ->
                     dataStore.edit { it[driveSyncEnabledKey] = event.enabled }
 
+                is SettingsEvent.SignInDriveResult -> {
+                    driveRepository.saveSignedInEmail(event.email)
+                    dataStore.edit { it[driveSyncEnabledKey] = true }
+                    _driveUiState.update { Triple(false, false, null) }
+                }
+
                 is SettingsEvent.SignInDrive -> {
+                    // Signal to UI to launch Credential Manager — handled in Screen
                     _driveUiState.update { it.copy(first = true) }
-                    driveRepository.signIn().fold(
-                        onSuccess = { email ->
-                            dataStore.edit { it[driveAccountEmailKey] = email }
-                            dataStore.edit { it[driveSyncEnabledKey] = true }
-                            _driveUiState.update { Triple(false, false, null) }
-                        },
-                        onFailure = { e ->
-                            _driveUiState.update { Triple(false, false, e.message ?: "Giriş başarısız") }
-                        },
-                    )
                 }
 
                 is SettingsEvent.SignOutDrive -> {

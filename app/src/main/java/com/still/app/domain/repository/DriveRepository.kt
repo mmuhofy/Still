@@ -4,13 +4,13 @@ package com.still.app.domain.repository
 interface DriveRepository {
 
     // Sign-in state
-    suspend fun signIn(): Result<String>   // returns account email on success
+    suspend fun saveSignedInEmail(email: String)
     suspend fun signOut()
-    fun getSignedInEmail(): String?        // null = not signed in
+    fun getSignedInEmail(): String?
 
     // Sync
     suspend fun uploadBackup(json: String): Result<Unit>
-    suspend fun downloadBackup(): Result<String?>  // null = no backup found on Drive
+    suspend fun downloadBackup(): Result<String?>
 
     // Last sync timestamp (epoch ms), 0 if never synced
     fun getLastSyncMs(): Long

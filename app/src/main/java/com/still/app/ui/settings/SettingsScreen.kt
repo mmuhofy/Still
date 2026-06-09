@@ -1,5 +1,13 @@
 package com.still.app.ui.settings
 
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.still.app.BuildConfig
+import kotlinx.coroutines.launch
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -47,7 +55,14 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.Bot
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.still.app.BuildConfig
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CloudUpload
 import com.composables.icons.lucide.Focus
@@ -76,6 +91,32 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Credential Manager sign-in — must run with activity context from UI layer
+    // UNTESTED — verify before use
+    val onSignInClick: () -> Unit = {
+        scope.launch {
+            try {
+                val credentialManager = CredentialManager.create(ctx)
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(BuildConfig.GOOGLE_CLIENT_ID)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+                val result = credentialManager.getCredential(ctx, request)
+                val token = GoogleIdTokenCredential.createFrom(result.credential.data)
+                viewModel.onEvent(SettingsEvent.SignInDriveResult(token.id))
+            } catch (e: GetCredentialCancellationException) {
+                // User cancelled — no error shown
+            } catch (e: Exception) {
+                viewModel.onEvent(SettingsEvent.SetDriveSyncEnabled(false))
+            }
+        }
+    }
     val ctx = LocalContext.current
     val appVersion = remember {
         try {
@@ -175,7 +216,7 @@ fun SettingsScreen(
                         label = "Google Drive ile bağlan",
                         description = "Notlarını otomatik yedekle",
                         loading = uiState.driveSignInLoading,
-                        onClick = { viewModel.onEvent(SettingsEvent.SignInDrive) },
+                        onClick = onSignInClick,
                     )
                 } else {
                     // Signed in — show account + sync toggle + last sync + sign out
