@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.room)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 val localProps = Properties().apply {
@@ -128,6 +129,7 @@ dependencies {
     implementation(libs.appcompat)
 
     implementation(libs.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 
     // Google Sign-In (Credential Manager)
     implementation(libs.credential.manager)

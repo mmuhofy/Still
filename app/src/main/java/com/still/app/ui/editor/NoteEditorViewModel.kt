@@ -5,7 +5,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,6 +15,7 @@ import com.still.app.domain.usecase.GetAiCompletionUseCase
 import com.still.app.domain.usecase.GetAiCompletionVariantsUseCase
 import com.still.app.domain.usecase.GetNoteByIdUseCase
 import com.still.app.domain.usecase.PinNoteUseCase
+import com.still.app.domain.usecase.SyncDriveUseCase
 import com.still.app.domain.usecase.UpdateNoteUseCase
 import com.still.app.ui.navigation.Routes
 import com.still.app.util.Constants
@@ -51,8 +51,6 @@ data class NoteEditorUiState(
     val aiError: String? = null,
     val showVariants: Boolean = false,
     val variants: List<String> = emptyList(),
-    // Focus mode: read from DataStore, toggled by user tap in editor
-    val isFocusMode: Boolean = false,
 )
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -64,7 +62,6 @@ sealed interface NoteEditorEvent {
     data object ApplyBold : NoteEditorEvent
     data object ApplyItalic : NoteEditorEvent
     data object ApplyUnderline : NoteEditorEvent
-    // level: 1 = "# ", 2 = "## ", 3 = "### "
     data class ApplyHeading(val level: Int) : NoteEditorEvent
     data object ApplyBullet : NoteEditorEvent
     data object Undo : NoteEditorEvent
@@ -74,8 +71,6 @@ sealed interface NoteEditorEvent {
     data object RequestVariants : NoteEditorEvent
     data class AcceptVariant(val text: String) : NoteEditorEvent
     data object DismissVariants : NoteEditorEvent
-    // Toggle focus mode on/off — also persists to DataStore
-    data object ToggleFocusMode : NoteEditorEvent
 }
 
 @HiltViewModel
@@ -88,6 +83,7 @@ class NoteEditorViewModel @Inject constructor(
     private val pinNote: PinNoteUseCase,
     private val getAiCompletion: GetAiCompletionUseCase,
     private val getAiVariants: GetAiCompletionVariantsUseCase,
+    private val syncDrive: SyncDriveUseCase,
     private val dataStore: DataStore<Preferences>,
 ) : ViewModel() {
 
@@ -96,14 +92,16 @@ class NoteEditorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(NoteEditorUiState(noteId = noteId))
     val uiState = _uiState.asStateFlow()
 
-    private val aiEnabledKey    = booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)
-    private val focusModeKey    = booleanPreferencesKey(Constants.PrefKeys.FOCUS_MODE_ENABLED)
-
     private val aiEnabledFlow = dataStore.data
-        .map { it[aiEnabledKey] ?: false }
+        .map { it[booleanPreferencesKey(Constants.PrefKeys.AI_ENABLED)] ?: false }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val driveSyncEnabledFlow = dataStore.data
+        .map { it[booleanPreferencesKey(Constants.PrefKeys.DRIVE_SYNC_ENABLED)] ?: false }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val aiEnabled get() = aiEnabledFlow.value
+    private val driveSyncEnabled get() = driveSyncEnabledFlow.value
 
     private var skipNextUndoPush = false
     private var aiJob: Job? = null
@@ -114,13 +112,6 @@ class NoteEditorViewModel @Inject constructor(
     private val MAX_STACK = 100
 
     init {
-        // Observe focus mode setting from DataStore
-        dataStore.data
-            .map { it[focusModeKey] ?: false }
-            .distinctUntilChanged()
-            .onEach { enabled -> _uiState.update { it.copy(isFocusMode = enabled) } }
-            .launchIn(viewModelScope)
-
         if (noteId == -1L) {
             _uiState.update { it.copy(isLoading = false) }
         } else {
@@ -156,7 +147,6 @@ class NoteEditorViewModel @Inject constructor(
                 val state = _uiState.value
                 val incoming = event.value
 
-                // Enter while ghost active → accept ghost
                 if (state.ghostText.isNotBlank()) {
                     val realLen = state.realTextLength
                     val realText = incoming.text.take(realLen)
@@ -169,7 +159,10 @@ class NoteEditorViewModel @Inject constructor(
                     val cleaned = TextFieldValue(
                         text = realText + incoming.text.drop(
                             realLen + state.ghostText.length
-                        ).let { if (incoming.text.length > realLen + state.ghostText.length) it else incoming.text.drop(realLen) },
+                        ).let {
+                            if (incoming.text.length > realLen + state.ghostText.length) it
+                            else incoming.text.drop(realLen)
+                        },
                         selection = incoming.selection.let {
                             TextRange(it.start.coerceAtMost(realText.length + 1))
                         },
@@ -237,9 +230,9 @@ class NoteEditorViewModel @Inject constructor(
                 applyLinePrefix(prefix)
             }
 
-            NoteEditorEvent.ApplyBullet    -> applyLinePrefix("- ")
+            NoteEditorEvent.ApplyBullet -> applyLinePrefix("- ")
 
-            NoteEditorEvent.AcceptGhost    -> acceptGhostInternal()
+            NoteEditorEvent.AcceptGhost -> acceptGhostInternal()
 
             NoteEditorEvent.DismissGhost -> {
                 aiJob?.cancel()
@@ -286,16 +279,6 @@ class NoteEditorViewModel @Inject constructor(
             NoteEditorEvent.DismissVariants -> {
                 _uiState.update { it.copy(showVariants = false, variants = emptyList()) }
             }
-
-            // Toggle focus mode and persist to DataStore
-            NoteEditorEvent.ToggleFocusMode -> {
-                val newValue = !_uiState.value.isFocusMode
-                viewModelScope.launch {
-                    dataStore.edit { prefs -> prefs[focusModeKey] = newValue }
-                }
-                // Optimistic update — DataStore observer will confirm
-                _uiState.update { it.copy(isFocusMode = newValue) }
-            }
         }
     }
 
@@ -322,7 +305,12 @@ class NoteEditorViewModel @Inject constructor(
         redoStack.clear()
         val newValue = handleBulletContinuation(current, value)
         _uiState.update {
-            it.copy(content = newValue, ghostText = "", realTextLength = newValue.text.length, aiError = null)
+            it.copy(
+                content = newValue,
+                ghostText = "",
+                realTextLength = newValue.text.length,
+                aiError = null,
+            )
         }
         scheduleAiCompletion(newValue.text)
     }
@@ -372,7 +360,7 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    // ── Save ──────────────────────────────────────────────────────────────────
+    // ── Save + Drive sync ─────────────────────────────────────────────────────
 
     private suspend fun save() {
         val state = _uiState.value
@@ -382,7 +370,7 @@ class NoteEditorViewModel @Inject constructor(
 
         val lines = fullText.lines()
         val title = lines.firstOrNull()?.take(200) ?: ""
-        val body  = lines.drop(1).joinToString("\n").trim()
+        val body = lines.drop(1).joinToString("\n").trim()
 
         _uiState.update { it.copy(isSaving = true) }
 
@@ -402,13 +390,22 @@ class NoteEditorViewModel @Inject constructor(
             )
             _uiState.update { it.copy(isSaving = false) }
         }
+
+        // Trigger Drive sync after save if enabled — fire-and-forget, no UI blocking
+        // UNTESTED — verify before use
+        if (driveSyncEnabled) {
+            viewModelScope.launch { syncDrive() }
+        }
     }
 
     // ── Bullet auto-continue ──────────────────────────────────────────────────
 
-    private fun handleBulletContinuation(previous: TextFieldValue, next: TextFieldValue): TextFieldValue {
+    private fun handleBulletContinuation(
+        previous: TextFieldValue,
+        next: TextFieldValue,
+    ): TextFieldValue {
         val prev = previous.text
-        val new  = next.text
+        val new = next.text
         val cursor = next.selection.start
 
         if (new.length != prev.length + 1) return next
@@ -428,11 +425,11 @@ class NoteEditorViewModel @Inject constructor(
         } else next
     }
 
-    // ── Inline format (wraps selection or inserts empty markers) ─────────────
+    // ── Inline format ─────────────────────────────────────────────────────────
 
     private fun applyInlineFormat(marker: String) {
         val current = _uiState.value.content
-        val sel  = current.selection
+        val sel = current.selection
         val text = current.text
 
         val newText: String
@@ -440,10 +437,10 @@ class NoteEditorViewModel @Inject constructor(
 
         if (sel.length > 0) {
             val selected = text.substring(sel.start, sel.end)
-            newText   = text.substring(0, sel.start) + "$marker$selected$marker" + text.substring(sel.end)
+            newText = text.substring(0, sel.start) + "$marker$selected$marker" + text.substring(sel.end)
             newCursor = sel.end + marker.length * 2
         } else {
-            newText   = text.substring(0, sel.start) + "$marker$marker" + text.substring(sel.start)
+            newText = text.substring(0, sel.start) + "$marker$marker" + text.substring(sel.start)
             newCursor = sel.start + marker.length
         }
 
@@ -458,15 +455,14 @@ class NoteEditorViewModel @Inject constructor(
         }
     }
 
-    // ── Line prefix (toggle: adds or removes) ─────────────────────────────────
+    // ── Line prefix ───────────────────────────────────────────────────────────
 
     private fun applyLinePrefix(prefix: String) {
         val current = _uiState.value.content
-        val text    = current.text
-        val cursor  = current.selection.start
+        val text = current.text
+        val cursor = current.selection.start
 
         val lineStart = text.lastIndexOf('\n', cursor - 1) + 1
-
         val existingHeadingRegex = Regex("""^#{1,3} """)
         val existingMatch = existingHeadingRegex.find(text.substring(lineStart))
 
@@ -475,16 +471,16 @@ class NoteEditorViewModel @Inject constructor(
 
         when {
             text.startsWith(prefix, lineStart) -> {
-                newText   = text.substring(0, lineStart) + text.substring(lineStart + prefix.length)
+                newText = text.substring(0, lineStart) + text.substring(lineStart + prefix.length)
                 newCursor = (cursor - prefix.length).coerceAtLeast(lineStart)
             }
             existingMatch != null && prefix.matches(Regex("""#{1,3} """)) -> {
                 val oldPrefix = existingMatch.value
-                newText   = text.substring(0, lineStart) + prefix + text.substring(lineStart + oldPrefix.length)
+                newText = text.substring(0, lineStart) + prefix + text.substring(lineStart + oldPrefix.length)
                 newCursor = cursor + (prefix.length - oldPrefix.length)
             }
             else -> {
-                newText   = text.substring(0, lineStart) + prefix + text.substring(lineStart)
+                newText = text.substring(0, lineStart) + prefix + text.substring(lineStart)
                 newCursor = cursor + prefix.length
             }
         }

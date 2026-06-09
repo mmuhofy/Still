@@ -1,6 +1,9 @@
 package com.still.app.domain.model
 
+import kotlinx.serialization.Serializable
+
 // Pure Kotlin domain model — zero Android/Room imports
+@Serializable
 data class Note(
     val id: Long = 0,
     val title: String,
