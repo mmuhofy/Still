@@ -45,6 +45,7 @@ data class NoteEditorUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val isDeleted: Boolean = false,
+    val isFocusMode: Boolean = false,
     val ghostText: String = "",
     val realTextLength: Int = 0,
     val isAiLoading: Boolean = false,
@@ -64,6 +65,7 @@ sealed interface NoteEditorEvent {
     data object ApplyUnderline : NoteEditorEvent
     data class ApplyHeading(val level: Int) : NoteEditorEvent
     data object ApplyBullet : NoteEditorEvent
+    data object ToggleFocusMode : NoteEditorEvent
     data object Undo : NoteEditorEvent
     data object Redo : NoteEditorEvent
     data object AcceptGhost : NoteEditorEvent
@@ -231,6 +233,10 @@ class NoteEditorViewModel @Inject constructor(
             }
 
             NoteEditorEvent.ApplyBullet -> applyLinePrefix("- ")
+
+            NoteEditorEvent.ToggleFocusMode -> {
+                _uiState.update { it.copy(isFocusMode = !it.isFocusMode) }
+            }
 
             NoteEditorEvent.AcceptGhost -> acceptGhostInternal()
 
