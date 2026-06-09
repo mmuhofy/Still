@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -45,18 +47,25 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.ScrollText
+import com.composables.icons.lucide.AlignJustify
 import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.CloudUpload
 import com.composables.icons.lucide.Focus
 import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.Moon
+import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.ScrollText
 import com.composables.icons.lucide.Shield
 import com.composables.icons.lucide.Type
 import com.still.app.ui.theme.CalmGold
 import com.still.app.ui.theme.CalmGoldSubtle
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -72,9 +81,7 @@ fun SettingsScreen(
     val appVersion = remember {
         try {
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "—"
-        } catch (_: Exception) {
-            "—"
-        }
+        } catch (_: Exception) { "—" }
     }
 
     Scaffold(
@@ -116,9 +123,7 @@ fun SettingsScreen(
                         onSelect = { viewModel.onEvent(SettingsEvent.SetColorScheme(it)) },
                     )
                 }
-
                 SettingsGroupDivider()
-
                 SettingsRowWithContent(
                     icon = Lucide.Type,
                     label = "Yazı tipi",
@@ -140,10 +145,7 @@ fun SettingsScreen(
                     checked = uiState.aiEnabled,
                     onCheckedChange = { viewModel.onEvent(SettingsEvent.SetAiEnabled(it)) },
                 )
-
                 SettingsGroupDivider()
-
-                // Focus mode — Phase 2, not yet implemented
                 SettingsSwitchRow(
                     icon = Lucide.Focus,
                     label = "Odak modu",
@@ -153,10 +155,7 @@ fun SettingsScreen(
                     badge = "Yakında",
                     enabled = false,
                 )
-
                 SettingsGroupDivider()
-
-                // Typewriter mode — Phase 2, not yet implemented
                 SettingsSwitchRow(
                     icon = Lucide.ScrollText,
                     label = "Daktilo modu",
@@ -168,6 +167,65 @@ fun SettingsScreen(
                 )
             }
 
+            // ── Senkronizasyon ────────────────────────────────────────────────
+            SettingsGroup(title = "Senkronizasyon") {
+                if (uiState.driveAccountEmail == null) {
+                    // Not signed in — show sign-in row
+                    SettingsTappableRow(
+                        icon = Lucide.CloudUpload,
+                        label = "Google Drive ile bağlan",
+                        description = "Notlarını otomatik yedekle",
+                        loading = uiState.driveSignInLoading,
+                        onClick = { viewModel.onEvent(SettingsEvent.SignInDrive) },
+                    )
+                } else {
+                    // Signed in — show account + sync toggle + last sync + sign out
+                    SettingsSwitchRow(
+                        icon = Lucide.CloudUpload,
+                        label = "Drive sync",
+                        description = uiState.driveAccountEmail,
+                        checked = uiState.driveSyncEnabled,
+                        onCheckedChange = { viewModel.onEvent(SettingsEvent.SetDriveSyncEnabled(it)) },
+                    )
+                    SettingsGroupDivider()
+                    SettingsTappableRow(
+                        icon = Lucide.RefreshCw,
+                        label = "Şimdi senkronize et",
+                        description = uiState.driveLastSyncMs.toLastSyncLabel(),
+                        loading = uiState.driveSyncLoading,
+                        onClick = { viewModel.onEvent(SettingsEvent.SyncNow) },
+                    )
+                    SettingsGroupDivider()
+                    SettingsTappableRow(
+                        icon = Lucide.LogOut,
+                        label = "Hesabın bağlantısını kes",
+                        tint = MaterialTheme.colorScheme.error,
+                        onClick = { viewModel.onEvent(SettingsEvent.SignOutDrive) },
+                    )
+                }
+
+                // Error message if any
+                if (uiState.driveError != null) {
+                    SettingsGroupDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = uiState.driveError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { viewModel.onEvent(SettingsEvent.DismissDriveError) }) {
+                            Text("Tamam", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+
             // ── Hakkında ──────────────────────────────────────────────────────
             SettingsGroup(title = "Hakkında") {
                 SettingsReadOnlyRow(
@@ -175,21 +233,17 @@ fun SettingsScreen(
                     label = "Sürüm",
                     value = appVersion,
                 )
-
                 SettingsGroupDivider()
-
                 SettingsTappableRow(
                     icon = Lucide.MessageSquare,
                     label = "Geri bildirim gönder",
-                    onClick = { /* TODO: open feedback link */ },
+                    onClick = { /* TODO */ },
                 )
-
                 SettingsGroupDivider()
-
                 SettingsTappableRow(
                     icon = Lucide.Shield,
                     label = "Gizlilik politikası",
-                    onClick = { /* TODO: open privacy policy link */ },
+                    onClick = { /* TODO */ },
                 )
             }
 
@@ -198,13 +252,18 @@ fun SettingsScreen(
     }
 }
 
-// ── Settings group card ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+private fun Long.toLastSyncLabel(): String {
+    if (this == 0L) return "Henüz senkronize edilmedi"
+    val fmt = SimpleDateFormat("d MMM, HH:mm", Locale("tr"))
+    return "Son: ${fmt.format(Date(this))}"
+}
+
+// ── Group card ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SettingsGroup(
-    title: String,
-    content: @Composable () -> Unit,
-) {
+private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
     Column {
         Text(
             text = title.uppercase(),
@@ -218,26 +277,24 @@ private fun SettingsGroup(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surface),
-        ) {
-            content()
-        }
+        ) { content() }
     }
 }
 
-// ── Divider inside a group card ───────────────────────────────────────────────
+// ── Divider ───────────────────────────────────────────────────────────────────
 
 @Composable
 private fun SettingsGroupDivider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 52.dp) // aligns with text, not icon
+            .padding(start = 52.dp)
             .height(0.5.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     )
 }
 
-// ── Row: icon + label/description + end slot ──────────────────────────────────
+// ── Row: icon + label + end slot ─────────────────────────────────────────────
 
 @Composable
 private fun SettingsRowWithContent(
@@ -328,14 +385,57 @@ private fun SettingsSwitchRow(
     }
 }
 
-// ── Row: read-only value ──────────────────────────────────────────────────────
+// ── Row: tappable ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun SettingsReadOnlyRow(
+private fun SettingsTappableRow(
     icon: ImageVector,
     label: String,
-    value: String,
+    description: String? = null,
+    loading: Boolean = false,
+    tint: Color = CalmGold,
+    onClick: () -> Unit,
 ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !loading, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsIcon(icon, tint = tint)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = CalmGold,
+            )
+        } else {
+            Icon(
+                imageVector = Lucide.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+// ── Row: read-only ────────────────────────────────────────────────────────────
+
+@Composable
+private fun SettingsReadOnlyRow(icon: ImageVector, label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -357,41 +457,14 @@ private fun SettingsReadOnlyRow(
     }
 }
 
-// ── Row: tappable with chevron ────────────────────────────────────────────────
+// ── Icon circle ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun SettingsTappableRow(
+private fun SettingsIcon(
     icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
+    dimmed: Boolean = false,
+    tint: Color = CalmGold,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SettingsIcon(icon)
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            imageVector = Lucide.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp),
-        )
-    }
-}
-
-// ── Icon with subtle gold bg circle ──────────────────────────────────────────
-
-@Composable
-private fun SettingsIcon(icon: ImageVector, dimmed: Boolean = false) {
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -402,13 +475,13 @@ private fun SettingsIcon(icon: ImageVector, dimmed: Boolean = false) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (dimmed) CalmGold.copy(alpha = 0.35f) else CalmGold,
+            tint = if (dimmed) tint.copy(alpha = 0.35f) else tint,
             modifier = Modifier.size(16.dp),
         )
     }
 }
 
-// ── "Yakında" badge chip ──────────────────────────────────────────────────────
+// ── Badge chip ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun BadgeChip(text: String) {
@@ -428,13 +501,10 @@ private fun BadgeChip(text: String) {
     }
 }
 
-// ── Color scheme — 3 pill cards ───────────────────────────────────────────────
+// ── Color scheme selector ─────────────────────────────────────────────────────
 
 @Composable
-private fun ColorSchemeSelector(
-    current: AppColorScheme,
-    onSelect: (AppColorScheme) -> Unit,
-) {
+private fun ColorSchemeSelector(current: AppColorScheme, onSelect: (AppColorScheme) -> Unit) {
     val options = listOf(
         AppColorScheme.AUTO  to "Oto",
         AppColorScheme.DARK  to "Koyu",
@@ -444,16 +514,13 @@ private fun ColorSchemeSelector(
         options.forEach { (scheme, label) ->
             val selected = current == scheme
             val bgColor by animateColorAsState(
-                targetValue = if (selected) CalmGold
-                              else MaterialTheme.colorScheme.surfaceVariant,
-                animationSpec = tween(durationMillis = 200),
-                label = "scheme_bg_$label",
+                targetValue = if (selected) CalmGold else MaterialTheme.colorScheme.surfaceVariant,
+                animationSpec = tween(200), label = "bg_$label",
             )
             val textColor by animateColorAsState(
                 targetValue = if (selected) MaterialTheme.colorScheme.background
                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = tween(durationMillis = 200),
-                label = "scheme_text_$label",
+                animationSpec = tween(200), label = "txt_$label",
             )
             Box(
                 modifier = Modifier
@@ -474,27 +541,21 @@ private fun ColorSchemeSelector(
     }
 }
 
-// ── Font selector — 3 options ─────────────────────────────────────────────────
+// ── Font selector ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun FontSelector(
-    current: AppFont,
-    onSelect: (AppFont) -> Unit,
-) {
+private fun FontSelector(current: AppFont, onSelect: (AppFont) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         AppFont.entries.forEach { font ->
             val selected = current == font
             val bgColor by animateColorAsState(
-                targetValue = if (selected) CalmGold
-                              else MaterialTheme.colorScheme.surfaceVariant,
-                animationSpec = tween(durationMillis = 200),
-                label = "font_bg_${font.name}",
+                targetValue = if (selected) CalmGold else MaterialTheme.colorScheme.surfaceVariant,
+                animationSpec = tween(200), label = "fontbg_${font.name}",
             )
             val textColor by animateColorAsState(
                 targetValue = if (selected) MaterialTheme.colorScheme.background
                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = tween(durationMillis = 200),
-                label = "font_text_${font.name}",
+                animationSpec = tween(200), label = "fonttxt_${font.name}",
             )
             Box(
                 modifier = Modifier
